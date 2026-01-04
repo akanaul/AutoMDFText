@@ -1,0 +1,44 @@
+# Modular MDF-E automation configuration template
+# Comments start with '#'. Sections (e.g. [MDFE]) group related typed fields.
+# Replace placeholder values with the exact text you want the automation to send.
+# The keys are referenced by the new modular script so updating this file changes every typed value.
+
+[GENERAL]
+dt_prompt_text = Digite o número do DT:
+alert_intro = Antes de prosseguir, baixe o XML e mantenha as abas abertas.
+
+[MDFE]
+prestador_tipo = PRESTADOR
+emitente_codigo = 0315-60
+uf_carregamento = SP
+uf_descarga = SP
+municipio_carregamento = ITU
+municipio_descarga = SOROCABA
+codigo_produto_descricao = PA/PALLET
+ncm_primary = 19041000
+ncm_secondary = 19059090
+cep_origem = 13300340
+cep_destino = 13315000
+frete_tipo = FRETE
+unidade_medida = 1
+carga_tipo = 05
+quantidade_unidade = 1
+
+[MODAL_RODOVIARIO]
+rntrc = 45501846
+contratante_nome = PEPSICO ITU
+contratante_cnpj = 02957518000224
+
+[INFORMACOES_ADICIONAIS]
+contribuinte_cnpj = 04898488000177
+prestador_adicional = 02957518000224
+terceiro_nome = SEGUROS SURA SA
+terceiro_cnpj = 33065699000127
+terceiro_apolice = 5400035882
+frete_valor = 1314.27
+frete_identificador = FRETE
+adicional_valor = 1321.02
+serie = 237
+numero_pedido = 2372/8
+
+template_note = Se faltar alguma entrada use um comentário com # para anotar o que deve ir em seguida.
