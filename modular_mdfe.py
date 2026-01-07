@@ -175,10 +175,6 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
     raise SystemExit(1)
 
 
-def type_value(value: str, interval: float = 0.3) -> None:
-    pyautogui.write(value, interval=interval)
-
-
 def navigate_to_mdfe() -> None:
     """Navega para o formulário MDF-e - cópia exata do script legado"""
     # IR PARA 3ª PAGINA - MDF
@@ -525,74 +521,16 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(7):
         pyautogui.press("tab")
         time.sleep(0.05)
-    for _ in range(2):
-        pyautogui.press("space")
-        time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.05)
     pyautogui.press("tab")
     time.sleep(0.05)
     pyautogui.press("enter")
     time.sleep(0.05)
     pyautogui.press("tab")
     pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.10)
-    time.sleep(0.05)
-    pyautogui.press("tab")
-    time.sleep(0.05)
-    pyautogui.press("enter")
-    time.sleep(1)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-    pyautogui.press("enter")
-    time.sleep(0.3)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-
-    pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("SELECIONE...", interval=0.1)
-    pyautogui.press("esc")
-    pyautogui.press("enter")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_identificador", "FRETE"), interval=0.1)
-    pyautogui.press("enter")
-    time.sleep(0.2)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.12)
-    time.sleep(0.2)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_identificador", "FRETE"), interval=0.12)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-    time.sleep(0.2)
-
-    for _ in range(5):
-        pyautogui.press("tab")
-        time.sleep(0.05)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade", "1"), interval=0.1)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.05)
-    pyautogui.press("space")
-    time.sleep(0.1)
-
-    for _ in range(7):
-        pyautogui.press("tab")
-        time.sleep(0.05)
-    for _ in range(2):
-        pyautogui.press("space")
-        time.sleep(0.05)
-    pyautogui.press("tab")
-    time.sleep(0.05)
-    pyautogui.press("enter")
-    time.sleep(0.05)
-    pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "adicional_valor", "1321.02"), interval=0.1)
     time.sleep(0.05)
     pyautogui.press("tab")
     time.sleep(0.05)
@@ -787,7 +725,7 @@ def main() -> None:
     # Pesquisar e posicionar em "e final"
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.2)
-    type_value("e final", 0.1)
+    pyautogui.write("e final", interval=0.1)
     time.sleep(0.2)
     pyautogui.press("esc")
     time.sleep(0.2)
