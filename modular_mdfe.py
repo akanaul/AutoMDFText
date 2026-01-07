@@ -607,6 +607,8 @@ def main() -> None:
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(0.2)
     pyperclip.copy(codigo.upper())
     pyautogui.hotkey("ctrl", "v") 
     time.sleep(0.2)
