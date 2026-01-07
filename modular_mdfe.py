@@ -596,7 +596,7 @@ def main() -> None:
     # Localizar o campo "NUMERO DO DT" via Ctrl+F, Tab para acessá-lo e colar o código
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
-    type_value("NUMERO DO DT", 0.1)
+    type_value("NUMERO DO DT", 0.3)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.2)
