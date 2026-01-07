@@ -114,45 +114,43 @@ def upload_latest_xml() -> None:
 
 
 def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
-    intervalo = 3.0
-    copy_attempts = 3
+    intervalo = 1.5
     short_sleep = 0.12
     inicio = time.monotonic()
     target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
 
-    log("Aguardando o formulário abrir...")
+    log("Aguardando o formulário abrir (Ctrl+A + Ctrl+C, 15s)...")
     ultimo_conteudo = ""
 
     while time.monotonic() - inicio < tempo_maximo:
+        # Somente tentativa direta: Ctrl+A e Ctrl+C
         try:
             pyperclip.copy("")
-        except Exception as exc:
-            log(f"Aviso: erro ao limpar o clipboard ({exc})")
+        except Exception:
+            pass
 
-        for _ in range(copy_attempts):
-            pyautogui.hotkey("ctrl", "a")
-            time.sleep(short_sleep)
-            pyautogui.hotkey("ctrl", "c")
-            time.sleep(short_sleep)
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(short_sleep)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(short_sleep)
 
         try:
             conteudo = pyperclip.paste() or ""
-        except Exception as exc:
+        except Exception:
             conteudo = ""
-            log(f"Aviso: erro ao ler o clipboard ({exc})")
 
         ultimo_conteudo = conteudo
         conteudo_norm = re.sub(r"\s+", " ", conteudo).strip().lower()
         log(f"Clipboard len={len(conteudo)}")
 
         if target_norm in conteudo_norm:
-            log("Formulário detectado")
+            log("Formulário detectado via conteúdo da página")
             return
 
-        log(f"Não detectado. Esperando {intervalo}s...")
+        log(f"Não detectado. Tentando novamente em {intervalo}s...")
         time.sleep(intervalo)
 
-    log(f"Tempo esgotado ao buscar '{target_text}'")
+    log(f"Tempo esgotado ao buscar '{target_text}' via Ctrl+A/C")
     if ultimo_conteudo:
         print(ultimo_conteudo[:400])
     raise SystemExit(1)
