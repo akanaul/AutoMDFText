@@ -619,14 +619,16 @@ def perform_averbacao() -> None:
     time.sleep(1)
 
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(2)
-    pyautogui.write("serie final", interval=0.12)
-    pyautogui.press("esc")
     time.sleep(0.5)
+    pyautogui.write("e final", interval=0.20)
+    pyautogui.press("esc")
+    time.sleep(0.2)
 
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(1)
+        time.sleep(0.1)
+
+    time.sleep(0.5)
 
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.5)
@@ -654,6 +656,7 @@ def perform_averbacao() -> None:
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.3)
+    # Seleciona tudo e copia
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.3)
     pyautogui.hotkey("ctrl", "c")
