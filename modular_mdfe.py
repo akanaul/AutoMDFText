@@ -156,6 +156,8 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
 
             if target_norm in conteudo_norm:
                 log("Formulário detectado!")
+                log("Continuando com o restante da automação...")
+                time.sleep(0.8)
                 return
 
             log(f"Não encontrado. Aguardando {intervalo}s antes da próxima tentativa.")
@@ -198,8 +200,10 @@ def navigate_to_mdfe() -> None:
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
+    """Preenche dados do MDF-e - cópia exata do script legado"""
+    # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("SELECIONE...", interval=0.2)
+    pyautogui.write("SELECIONE...", interval=0.20)
     pyautogui.press("esc")
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -213,29 +217,34 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
 
-    pyautogui.write(profile.get_value("mdfe", "emitente_codigo", "0315-60"), interval=0.1)
+    # EMITENTE
+    pyautogui.write(profile.get_value("mdfe", "emitente_codigo", "0315-60"), interval=0.10)
     pyautogui.press("enter")
     time.sleep(0.5)
+
     for _ in range(7):
         pyautogui.press("tab")
         time.sleep(0.1)
     pyautogui.press("space")
     time.sleep(0.2)
 
-    pyautogui.write(profile.get_value("mdfe", "uf_carregamento", "SP"), interval=0.2)
+    # UF CARREGAMENTO E DESCARREGAMENTO
+    pyautogui.write(profile.get_value("mdfe", "uf_carregamento", "SP"), interval=0.20)
     pyautogui.press("enter")
     pyautogui.press("tab")
     time.sleep(0.5)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "uf_descarga", "SP"), interval=0.2)
+    pyautogui.write(profile.get_value("mdfe", "uf_descarga", "SP"), interval=0.20)
     pyautogui.press("enter")
     time.sleep(0.5)
 
+    # MUNICIPIO DE CARREGAMENTO
     pyautogui.press("tab")
     time.sleep(0.1)
     pyautogui.write(profile.get_value("mdfe", "municipio_carregamento", "ITU").upper(), interval=0.15)
     time.sleep(0.3)
+
     for _ in range(4):
         pyautogui.press("down")
         time.sleep(0.1)
@@ -258,6 +267,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(2)
 
+    # UNIDADE DE MEDIDA
     for _ in range(5):
         pyautogui.press("tab")
         time.sleep(0.1)
@@ -266,6 +276,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.write(profile.get_value("mdfe", "unidade_medida", "1"), interval=0.1)
     pyautogui.press("enter")
 
+    # TIPO DE CARGA
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
@@ -276,23 +287,49 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.write(profile.get_value("mdfe", "carga_tipo", "05"), interval=0.1)
     pyautogui.press("enter")
 
+    # DESCRIÇÃO DO PRODUTO
     pyautogui.press("tab")
-    time.sleep(0.05)
-    pyautogui.write(profile.get_value("mdfe", "codigo_produto_descricao", "PA/PALLET"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "produto_descricao", "PA/PALLET"), interval=0.1)
 
+    # CÓDIGO NCM
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
-    pyautogui.write(profile.get_value("mdfe", "ncm_primary", "19041000"), interval=0.1)
+    
+    opcao = pyautogui.confirm(
+        text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
+        title='Escolha de NCM',
+        buttons=['19041000', '19059090', '20052000', 'Outro código', 'Cancelar']
+    )
+
+    if opcao == 'Cancelar':
+        pyautogui.alert('Nenhum código NCM selecionado. O script foi pausado.')
+        pyautogui.FAILSAFE = True
+        raise SystemExit(1)
+    elif opcao == 'Outro código':
+        codigo = pyautogui.prompt('Digite o código NCM:')
+        if not codigo:
+            pyautogui.alert('Nenhum código NCM digitado. O script foi pausado.')
+            pyautogui.FAILSAFE = True
+            raise SystemExit(1)
+    else:
+        codigo = opcao
+    
+    pyautogui.write(codigo.upper(), interval=0.1)
     pyautogui.press("enter")
 
+    # CEP ORIGEM
     pyautogui.press("tab")
     pyautogui.press("space")
     pyautogui.press("tab")
-    type_value(profile.get_value("mdfe", "cep_destino", "13315000"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_origem", "13300340"), interval=0.1)
 
-    pyautogui.press("tab")
-    pyautogui.write(profile.get_value("mdfe", "municipio_descarga", "SOROCABA"), interval=0.15)
+    # CEP DESTINO
+    for _ in range(3):
+        pyautogui.press("tab")
+        time.sleep(0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_destino", "13315000"), interval=0.1)
+    time.sleep(1)
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
