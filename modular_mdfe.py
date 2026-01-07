@@ -113,53 +113,53 @@ def upload_latest_xml() -> None:
     pyautogui.press("enter")
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 40.0) -> None:
-    intervalo_inicial = 1.0
-    intervalo_maximo = 3.0
+def wait_for_form(target_text: str, tempo_maximo: float = 60.0) -> None:
+    intervalo_inicial = 1.5
+    intervalo_maximo = 2.0
     short_sleep = 0.2
     inicio = time.monotonic()
-    target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
     
     # Textos alternativos para buscar
-    targets = [target_text, "Emissor MDF-e", "emitente", "Dados do MDF-e", "MDF-e"]
+    targets = [target_text, "Emissor MDF-e", "emitente", "Dados do MDF-e", "MDF-e", "prestador"]
 
-    log(f"Aguardando o formulário abrir (buscando '{target_text}' ou variantes)...")
-    log(f"Timeout máximo: {tempo_maximo}s")
+    log(f"[WAIT_FORM] Buscando formulário: '{target_text}'")
+    log(f"[WAIT_FORM] Timeout: {tempo_maximo}s")
+    print("=" * 60)
+    
     ultimo_conteudo = ""
-    conteudo_anterior = ""
-    confirmacoes_necessarias = 1  # Reduzido para detectar mais rapidamente
     confirmacoes = 0
     tentativa = 0
 
     while time.monotonic() - inicio < tempo_maximo:
         tentativa += 1
-        intervalo_atual = min(intervalo_inicial + (tentativa * 0.3), intervalo_maximo)
+        intervalo_atual = min(intervalo_inicial + (tentativa * 0.1), intervalo_maximo)
         
         # Garantir que não está em nenhum campo de entrada
         pyautogui.press("esc")
-        time.sleep(0.1)
+        time.sleep(0.15)
         
         conteudo = ""
         
-        # Limpar clipboard
+        # Limpar clipboard antes
         try:
             pyperclip.copy("")
-            time.sleep(0.05)
+            time.sleep(0.1)
         except Exception:
             pass
 
-        # Tentar capturar conteúdo com múltiplas estratégias
-        for attempt in range(3):
+        # Tentar capturar conteúdo
+        for attempt in range(2):
             try:
                 pyautogui.hotkey("ctrl", "a")
-                time.sleep(0.1)
+                time.sleep(0.12)
                 pyautogui.hotkey("ctrl", "c")
-                time.sleep(0.15)
+                time.sleep(0.2)
 
                 conteudo = pyperclip.paste() or ""
-                if len(conteudo) > 50:  # Reduzido para detectar mais cedo
+                if len(conteudo) > 30:
                     break
             except Exception as e:
+                log(f"[WAIT_FORM] Erro ao capturar clipboard: {e}")
                 conteudo = ""
             
             time.sleep(0.1)
@@ -167,37 +167,39 @@ def wait_for_form(target_text: str, tempo_maximo: float = 40.0) -> None:
         ultimo_conteudo = conteudo
         conteudo_norm = re.sub(r"\s+", " ", conteudo).strip().lower()
         
-        # Mostrar preview do conteúdo capturado
-        preview = conteudo_norm[:100].replace("\n", " ") if conteudo_norm else "(vazio)"
-        log(f"[{tentativa}] {len(conteudo)} chars | {preview}")
+        # Preview do conteúdo
+        preview = conteudo_norm[:80].replace("\n", " ") if conteudo_norm else "(vazio)"
+        tempo_decorrido = time.monotonic() - inicio
+        print(f"[{tentativa:3d}s={tempo_decorrido:5.1f}] {len(conteudo):4d}ch | {preview}")
 
-        # Verificar se algum dos textos alvo foi encontrado
+        # Verificar se algum texto alvo foi encontrado
         encontrado = False
         texto_encontrado = ""
         for target in targets:
-            if re.sub(r"\s+", " ", target).strip().lower() in conteudo_norm:
+            target_norm = re.sub(r"\s+", " ", target).strip().lower()
+            if target_norm in conteudo_norm:
                 encontrado = True
                 texto_encontrado = target
                 break
 
         if encontrado:
             confirmacoes += 1
-            log(f"✓ '{texto_encontrado}' detectado! ({confirmacoes}/{confirmacoes_necessarias})")
-            if confirmacoes >= confirmacoes_necessarias:
-                log("✓ Formulário aberto! Continuando...")
-                time.sleep(0.5)
-                return
+            log(f"✓ DETECTADO: '{texto_encontrado}' ({confirmacoes}/1)")
+            log(f"✓ Formulário aberto com sucesso!")
+            print("=" * 60)
+            time.sleep(0.5)
+            return
         else:
             confirmacoes = 0
-            log(f"Aguardando formulário ({intervalo_atual:.1f}s até próxima tentativa)...")
 
         time.sleep(intervalo_atual)
 
-    log(f"✗ ERRO: Formulário não abriu em {tempo_maximo}s")
+    log(f"✗ ERRO: Formulário NÃO abriu em {tempo_maximo}s")
     if ultimo_conteudo:
         log("Último conteúdo capturado:")
         print(ultimo_conteudo[:500])
-    pyautogui.alert(f"ERRO: Formulário MDF-e não abriu em {tempo_maximo} segundos.\nVerifique se a página carregou corretamente.")
+    print("=" * 60)
+    pyautogui.alert(f"ERRO: Formulário MDF-e não abriu em {tempo_maximo} segundos.\n\nÚltimo conteúdo:\n{ultimo_conteudo[:200]}")
     raise SystemExit(1)
 
 
@@ -206,25 +208,29 @@ def type_value(value: str, interval: float = 0.3) -> None:
 
 
 def navigate_to_mdfe() -> None:
+    log("Abrindo aba 3...")
     pyautogui.hotkey("ctrl", "3")
-    time.sleep(0.5)
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.2)
-    pyautogui.write("EMITIR NOTA", interval=0.1)
-    time.sleep(0.2)
-    pyautogui.press("esc")
-    time.sleep(0.1)
-    pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(0.7)
     
+    log("Procurando 'EMITIR NOTA'...")
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.2)
-    pyautogui.write("MDF-E", interval=0.1)
-    time.sleep(0.2)
+    time.sleep(0.3)
+    pyautogui.write("EMITIR NOTA", interval=0.1)
+    time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.0)
+    
+    log("Procurando 'MDF-E'...")
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
+    pyautogui.write("MDF-E", interval=0.1)
+    time.sleep(0.3)
+    pyautogui.press("esc")
+    time.sleep(0.2)
+    pyautogui.press("enter")
+    time.sleep(3.0)
     
     log("Navegação para MDF-e concluída. Aguardando carregamento do formulário...")
 
@@ -740,11 +746,11 @@ def main() -> None:
     
     # Ir para página 3 - MDF
     pyautogui.hotkey("ctrl", "3")
-    time.sleep(0.5)
+    time.sleep(1)
     
-    # Aguardar formulário
+    # Aguardar formulário com timeout maior
     navigate_to_mdfe()
-    wait_for_form("Dados do MDF-e")
+    wait_for_form("Dados do MDF-e", tempo_maximo=90.0)
     
     # Preencher formulário
     fill_mdfe(profile)
