@@ -2,6 +2,7 @@ import argparse
 import ctypes
 import os
 import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -81,6 +82,12 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
         print(f"  {idx}. {name}")
     print("Enter para usar o template padrão (ou digite o número)")
     choice = input("Opção: ").strip()
+    
+    # Fechar o terminal após seleção
+    if os.name == 'nt':  # Windows
+        import subprocess
+        subprocess.Popen('cmd /C "timeout /t 1 >nul & exit"', shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    
     if not choice:
         return default
     if choice.isdigit():
