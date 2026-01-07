@@ -225,9 +225,10 @@ def navigate_to_mdfe() -> None:
     pyautogui.write("MDF-E", interval=0.1)
     time.sleep(0.2)
     pyautogui.press("esc")
-    time.sleep(0.4)
-    pyautogui.press("enter")
-    time.sleep(0.7)
+    time.sleep(0.8)
+    for _ in range(2):
+        pyautogui.press("enter")
+        time.sleep(0.5)
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
