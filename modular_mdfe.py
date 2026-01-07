@@ -113,62 +113,79 @@ def upload_latest_xml() -> None:
     pyautogui.press("enter")
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
-    intervalo = 1.5
-    short_sleep = 0.12
+def wait_for_form(target_text: str, tempo_maximo: float = 30.0) -> None:
+    intervalo_inicial = 1.5
+    intervalo_maximo = 4.0
+    short_sleep = 0.15
     inicio = time.monotonic()
     target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
 
-    log("Aguardando o formulário abrir (Ctrl+A + Ctrl+C, 15s)...")
+    log(f"Aguardando o formulário abrir (buscando '{target_text}')...")
     ultimo_conteudo = ""
     conteudo_anterior = ""
     confirmacoes_necessarias = 2
     confirmacoes = 0
+    tentativa = 0
 
     while time.monotonic() - inicio < tempo_maximo:
-        # Somente tentativa direta: Ctrl+A e Ctrl+C
+        tentativa += 1
+        # Intervalo progressivo: aumenta a cada tentativa até o máximo
+        intervalo_atual = min(intervalo_inicial + (tentativa * 0.3), intervalo_maximo)
+        
+        # Estratégias múltiplas de cópia para garantir captura
+        conteudo = ""
+        
+        # Estratégia 1: Limpar clipboard e copiar com delay maior
         try:
             pyperclip.copy("")
+            time.sleep(0.1)
         except Exception:
             pass
 
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(short_sleep)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(short_sleep)
+        # Tentar múltiplas vezes se necessário
+        for attempt in range(3):
+            pyautogui.hotkey("ctrl", "a")
+            time.sleep(short_sleep)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(short_sleep * 1.5)
 
-        try:
-            conteudo = pyperclip.paste() or ""
-        except Exception:
-            conteudo = ""
+            try:
+                conteudo = pyperclip.paste() or ""
+                if len(conteudo) > 50:  # Se capturou conteúdo relevante, sair
+                    break
+            except Exception:
+                conteudo = ""
+            
+            time.sleep(0.1)
 
         ultimo_conteudo = conteudo
         conteudo_norm = re.sub(r"\s+", " ", conteudo).strip().lower()
-        log(f"Clipboard len={len(conteudo)}")
+        log(f"Tentativa {tentativa}: Clipboard len={len(conteudo)}")
 
         if target_norm in conteudo_norm:
             # Verificar se o conteúdo está estável (não está recarregando)
-            if conteudo == conteudo_anterior:
+            if conteudo == conteudo_anterior and len(conteudo) > 100:
                 confirmacoes += 1
-                log(f"Conteúdo estável ({confirmacoes}/{confirmacoes_necessarias})")
+                log(f"✓ Conteúdo estável ({confirmacoes}/{confirmacoes_necessarias})")
                 if confirmacoes >= confirmacoes_necessarias:
-                    log("Formulário detectado e estável")
+                    log("✓ Formulário detectado e estável!")
                     return
             else:
                 confirmacoes = 0
-                log("Formulário detectado, mas ainda carregando...")
+                log(f"Formulário '{target_text}' detectado, aguardando estabilização...")
             
             conteudo_anterior = conteudo
         else:
             confirmacoes = 0
             conteudo_anterior = ""
+            log(f"'{target_text}' não encontrado. Aguardando {intervalo_atual:.1f}s...")
 
-        log(f"Tentando novamente em {intervalo}s...")
-        time.sleep(intervalo)
+        time.sleep(intervalo_atual)
 
-    log(f"Tempo esgotado ao buscar '{target_text}' via Ctrl+A/C")
+    log(f"✗ Tempo esgotado ao buscar '{target_text}' via Ctrl+A/C")
     if ultimo_conteudo:
-        print(ultimo_conteudo[:400])
+        log("Conteúdo capturado:")
+        print(ultimo_conteudo[:500])
     raise SystemExit(1)
 
 
@@ -636,7 +653,7 @@ def main() -> None:
 
     ensure_caps_off()
     navigate_to_mdfe()
-    wait_for_form("Emissor MDF-e")
+    wait_for_form("Dados do MDF-e")
     fill_mdfe(profile)
     fill_modal_rodo(profile)
     fill_additional_info(profile)
