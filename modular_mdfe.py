@@ -156,7 +156,7 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
     raise SystemExit(1)
 
 
-def type_value(value: str, interval: float = 0.1) -> None:
+def type_value(value: str, interval: float = 0.3) -> None:
     pyautogui.write(value, interval=interval)
 
 
@@ -592,8 +592,18 @@ def main() -> None:
         pyautogui.alert("Nenhum código informado. O script foi pausado.")
         pyautogui.FAILSAFE = True
         return
-    pyautogui.write(codigo.upper(), interval=0.1)
-    pyautogui.press("enter")
+    
+    # Localizar o campo "NUMERO DO DT" via Ctrl+F, Tab para acessá-lo e colar o código
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
+    type_value("NUMERO DO DT", 0.1)
+    time.sleep(0.3)
+    pyautogui.press("esc")
+    time.sleep(0.2)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyperclip.copy(codigo.upper())
+    pyautogui.hotkey("ctrl", "v")
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.5)
