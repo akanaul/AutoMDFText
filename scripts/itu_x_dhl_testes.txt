@@ -1,8 +1,3 @@
-# Modular MDF-E automation configuration template
-# Comments start with '#'. Sections (e.g. [MDFE]) group related typed fields.
-# Replace placeholder values with the exact text you want the automation to send.
-# The keys are referenced by the new modular script so updating this file changes every typed value.
-
 [GENERAL]
 dt_prompt_text = Digite o número do DT:
 alert_intro = Baixe o arquivo XML antes de prosseguir.
@@ -13,7 +8,7 @@ emitente_codigo = 0315-60
 uf_carregamento = SP
 uf_descarga = SP
 municipio_carregamento = ITU
-municipio_descarga = CABREUVA
+municipio_descarga = SOROCABA
 codigo_produto_descricao = PA/PALLET
 ncm_primary = 19041000
 ncm_secondary = 19059090
@@ -38,5 +33,3 @@ frete_valor = 1314.27
 frete_identificador = FRETE
 numero_banco = 237
 agencia = 2372/8
-
-template_note = Se faltar alguma entrada use um comentário com # para anotar o que deve ir em seguida.

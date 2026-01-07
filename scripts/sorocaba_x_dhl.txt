@@ -1,6 +1,6 @@
 [GENERAL]
 dt_prompt_text = Digite o número do DT:
-alert_intro = Antes de prosseguir, baixe o XML e mantenha as abas abertas.
+alert_intro = Baixe o arquivo XML antes de prosseguir.
 
 [MDFE]
 prestador_tipo = PRESTADOR
@@ -12,7 +12,6 @@ municipio_descarga = CABREUVA
 codigo_produto_descricao = PA/PALLET
 ncm_primary = 18069000
 ncm_secondary = 22029900
-ncm_tertiary = 19059090
 cep_origem = 18087101
 cep_destino = 13315000
 frete_tipo = FRETE
@@ -27,12 +26,10 @@ contratante_cnpj = 02957518000739
 
 [INFORMACOES_ADICIONAIS]
 contribuinte_cnpj = 04898488000177
-prestador_adicional = 02957518000739
-terceiro_nome = SEGUROS SURA SA
-terceiro_cnpj = 33065699000127
-terceiro_apolice = 5400035882
+seguradora_nome = SEGUROS SURA SA
+seguradora_cnpj = 33065699000127
+numero_apolice = 5400035882
 frete_valor = 1321.02
 frete_identificador = FRETE
-adicional_valor = 1321.02
-serie = 237
-numero_pedido = 2372/8
+numero_banco = 237
+agencia = 2372/8

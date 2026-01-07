@@ -419,13 +419,13 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "prestador_adicional", "02957518000224"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_nome", "SEGUROS SURA SA"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_nome", "SEGUROS SURA SA"), interval=0.10)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_cnpj", "33065699000127"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj", "33065699000127"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_apolice", "5400035882"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice", "5400035882"), interval=0.10)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -464,12 +464,12 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "serie", "237"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco", "237"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_pedido", "2372/8"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia", "2372/8"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
@@ -614,15 +614,14 @@ def perform_averbacao() -> None:
     time.sleep(1)
 
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("e final", interval=0.2)
+    time.sleep(2)
+    pyautogui.write("serie final", interval=0.12)
     pyautogui.press("esc")
-    time.sleep(0.2)
+    time.sleep(0.5)
 
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
-
-    time.sleep(0.5)
+        time.sleep(1)
 
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.5)
@@ -697,6 +696,16 @@ def main() -> None:
 
     profile = ConfigProfile(profile_path)
     
+    # Alerta ANTES de abrir navegador (workflow TESTES)
+    pyautogui.alert(
+        'ANTES DE PROSSEGUIR:\n\n'
+        '1. Mantenha 3 abas do Invoisys abertas e o site de averbação logado;\n'
+        '2. Deixe o navegador como o primeiro app na barra do Windows;\n'
+        '3. Mantenha apenas uma janela do navegador ativa.\n\n'
+        'OBS: Para interromper o código, mova o mouse repetidamente para o canto superior direito da tela.'
+    )
+    time.sleep(1)
+    
     # Abrir navegador
     pyautogui.hotkey("winleft", "1")
     time.sleep(1)
@@ -712,26 +721,31 @@ def main() -> None:
     pyautogui.press("f5")
     time.sleep(1)
 
-    # Voltar para aba 1 (2x como no legado)
-    pyautogui.hotkey("ctrl", "1")
-    time.sleep(1)
+    # Voltar para aba 1
     pyautogui.hotkey("ctrl", "1")
     time.sleep(0.5)
-
-    # Pesquisar e posicionar em "e final"
+    
+    # Pesquisar "empresa" (workflow TESTES)
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.2)
-    pyautogui.write("e final", interval=0.1)
-    time.sleep(0.2)
+    time.sleep(1)
+    pyautogui.write("empresa", interval=0.10)
     pyautogui.press("esc")
-    time.sleep(0.2)
-
-    # Tab 2x como no legado
+    time.sleep(0.5)
+    
+    # Validar aba CTE (workflow TESTES)
+    wait_for_form("notas emitidas: ct-e", tempo_maximo=4.0)
+    time.sleep(1)
+    
+    # Pesquisar "serie final" para posicionar DT
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(2)
+    pyautogui.write("serie final", interval=0.12)
+    pyautogui.press("esc")
+    time.sleep(0.5)
+    
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
-
-    time.sleep(0.5)
+        time.sleep(1)
 
     # Prompt para DT
     prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
@@ -741,16 +755,15 @@ def main() -> None:
         pyautogui.FAILSAFE = True
         return
     
-    # Escrever código DT e dar enter 2x como no legado
+    # Escrever código DT e dar enter 2x
     pyautogui.write(codigo.upper(), interval=0.1)
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.5)
 
-    # Alerta com instruções
-    pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n2. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
-    
+    # Alerta com instruções (do perfil)
+    pyautogui.alert(profile.get_value("general", "alert_intro", "Baixe o arquivo XML antes de prosseguir."))
     time.sleep(1)
 
     # Desativar Caps Lock
