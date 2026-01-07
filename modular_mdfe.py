@@ -121,6 +121,9 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
 
     log("Aguardando o formulário abrir (Ctrl+A + Ctrl+C, 15s)...")
     ultimo_conteudo = ""
+    conteudo_anterior = ""
+    confirmacoes_necessarias = 2
+    confirmacoes = 0
 
     while time.monotonic() - inicio < tempo_maximo:
         # Somente tentativa direta: Ctrl+A e Ctrl+C
@@ -144,10 +147,23 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
         log(f"Clipboard len={len(conteudo)}")
 
         if target_norm in conteudo_norm:
-            log("Formulário detectado via conteúdo da página")
-            return
+            # Verificar se o conteúdo está estável (não está recarregando)
+            if conteudo == conteudo_anterior:
+                confirmacoes += 1
+                log(f"Conteúdo estável ({confirmacoes}/{confirmacoes_necessarias})")
+                if confirmacoes >= confirmacoes_necessarias:
+                    log("Formulário detectado e estável")
+                    return
+            else:
+                confirmacoes = 0
+                log("Formulário detectado, mas ainda carregando...")
+            
+            conteudo_anterior = conteudo
+        else:
+            confirmacoes = 0
+            conteudo_anterior = ""
 
-        log(f"Não detectado. Tentando novamente em {intervalo}s...")
+        log(f"Tentando novamente em {intervalo}s...")
         time.sleep(intervalo)
 
     log(f"Tempo esgotado ao buscar '{target_text}' via Ctrl+A/C")
@@ -577,12 +593,13 @@ def main() -> None:
         pyautogui.press("esc")
         time.sleep(0.3)
 
+    # Recarregar a aba 3 uma vez no início
     pyautogui.hotkey("ctrl", "3")
     time.sleep(0.5)
     pyautogui.press("f5")
-    time.sleep(1)
-    pyautogui.hotkey("ctrl", "1")
-    time.sleep(1)
+    time.sleep(2)
+    
+    # Voltar para a aba 1
     pyautogui.hotkey("ctrl", "1")
     time.sleep(0.5)
 
