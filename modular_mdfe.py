@@ -120,10 +120,8 @@ def upload_latest_xml() -> None:
     pyautogui.press("enter")
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 15.0) -> None:
+def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 3.0, copy_attempts: int = 3) -> None:
     """Aguarda o formulário abrir detectando texto específico - cópia do script legado"""
-    intervalo = 3.0           # segundos entre tentativas
-    copy_attempts = 3         # pequenas tentativas rápidas de Ctrl+C por iteração
     short_sleep = 0.12        # pausa curta entre ações de cópia
     
     inicio = time.monotonic()
@@ -739,8 +737,8 @@ def main() -> None:
     pyautogui.press("esc")
     time.sleep(0.5)
     
-    # Validar aba CTE (workflow TESTES)
-    wait_for_form("notas emitidas: ct-e", tempo_maximo=4.0)
+    # Validar aba CTE (workflow TESTES) - 4s timeout, 2 copy attempts
+    wait_for_form("notas emitidas: ct-e", tempo_maximo=4.0, intervalo=1.0, copy_attempts=2)
     time.sleep(1)
     
     # Pesquisar "serie final" para posicionar DT
