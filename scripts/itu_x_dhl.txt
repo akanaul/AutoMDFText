@@ -8,7 +8,6 @@ emitente_codigo = 0315-60
 uf_carregamento = SP
 uf_descarga = SP
 municipio_carregamento = ITU
-municipio_descarga = CABREUVA
 codigo_produto_descricao = PA/PALLET
 ncm_primary = 19041000
 ncm_secondary = 19059090

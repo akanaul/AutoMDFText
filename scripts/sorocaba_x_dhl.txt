@@ -8,7 +8,6 @@ emitente_codigo = 0315-60
 uf_carregamento = SP
 uf_descarga = SP
 municipio_carregamento = SOROCABA
-municipio_descarga = CABREUVA
 codigo_produto_descricao = PA/PALLET
 ncm_primary = 18069000
 ncm_secondary = 22029900
