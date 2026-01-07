@@ -209,7 +209,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "prestador_tipo", "PRESTADOR"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "prestador_tipo"), interval=0.1)
     time.sleep(0.5)
     pyautogui.press("enter")
     time.sleep(0.2)
@@ -219,7 +219,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
 
     # EMITENTE
-    pyautogui.write(profile.get_value("mdfe", "emitente_codigo", "0315-60"), interval=0.10)
+    pyautogui.write(profile.get_value("mdfe", "emitente_codigo"), interval=0.10)
     pyautogui.press("enter")
     time.sleep(0.5)
 
@@ -230,20 +230,20 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
 
     # UF CARREGAMENTO E DESCARREGAMENTO
-    pyautogui.write(profile.get_value("mdfe", "uf_carregamento", "SP"), interval=0.20)
+    pyautogui.write(profile.get_value("mdfe", "uf_carregamento"), interval=0.20)
     pyautogui.press("enter")
     pyautogui.press("tab")
     time.sleep(0.5)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "uf_descarga", "SP"), interval=0.20)
+    pyautogui.write(profile.get_value("mdfe", "uf_descarga"), interval=0.20)
     pyautogui.press("enter")
     time.sleep(0.5)
 
     # MUNICIPIO DE CARREGAMENTO
     pyautogui.press("tab")
     time.sleep(0.1)
-    pyautogui.write(profile.get_value("mdfe", "municipio_carregamento", "ITU").upper(), interval=0.15)
+    pyautogui.write(profile.get_value("mdfe", "municipio_carregamento").upper(), interval=0.15)
     time.sleep(0.3)
 
     for _ in range(4):
@@ -274,7 +274,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         time.sleep(0.1)
     pyautogui.press("space")
     time.sleep(0.1)
-    pyautogui.write(profile.get_value("mdfe", "unidade_medida", "1"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "unidade_medida"), interval=0.1)
     pyautogui.press("enter")
 
     # TIPO DE CARGA
@@ -285,12 +285,12 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     pyautogui.press("space")
     time.sleep(0.1)
-    pyautogui.write(profile.get_value("mdfe", "carga_tipo", "05"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "carga_tipo"), interval=0.1)
     pyautogui.press("enter")
 
     # DESCRIÇÃO DO PRODUTO
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("mdfe", "produto_descricao", "PA/PALLET"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "produto_descricao"), interval=0.1)
 
     # CÓDIGO NCM
     for _ in range(2):
@@ -323,13 +323,13 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     pyautogui.press("space")
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("mdfe", "cep_origem", "13300340"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_origem"), interval=0.1)
 
     # CEP DESTINO
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.1)
-    pyautogui.write(profile.get_value("mdfe", "cep_destino", "13315000"), interval=0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_destino"), interval=0.1)
     time.sleep(1)
 
 
@@ -352,7 +352,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     pyautogui.write("RNTRC", interval=0.10)
     pyautogui.press("esc")
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc", "45501846"), interval=0.10)
+    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc"), interval=0.10)
     
     # NOME DO CONTRATANTE
     for _ in range(6):
@@ -360,12 +360,12 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
         time.sleep(0.1)
     pyautogui.press("space")
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome", "PEPSICO ITU"), interval=0.20)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.20)
     time.sleep(0.1)
 
     # CNPJ DO CONTRATATANTE
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
@@ -406,7 +406,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.3)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj", "04898488000177"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj"), interval=0.10)
     pyautogui.press("tab")
     time.sleep(0.3)
     pyautogui.press("enter")
@@ -424,13 +424,13 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_nome", "SEGUROS SURA SA"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_nome"), interval=0.10)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj", "33065699000127"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice", "5400035882"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice"), interval=0.10)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -443,38 +443,38 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome", "PEPSICO DO BRASIL"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj", "02957518000224"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.3)
 
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade", "1"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco", "237"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia", "2372/8"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
@@ -497,11 +497,10 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.12)
-    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo", "FRETE"), interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo"), interval=0.12)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -535,7 +534,123 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(0.05)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.10)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
+    time.sleep(0.05)
+    pyautogui.press("tab")
+    time.sleep(0.05)
+    pyautogui.press("enter")
+    time.sleep(1)
+    time.sleep(0.2)
+    pyautogui.write("CONTRA", interval=0.10)
+    pyautogui.press("enter")
+    time.sleep(0.3)
+    pyautogui.press("tab")
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
+    pyautogui.press("tab")
+    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj"), interval=0.12)
+    pyautogui.press("tab")
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice"), interval=0.10)
+    pyautogui.press("tab")
+    pyautogui.press("enter")
+    time.sleep(0.3)
+
+    for _ in range(4):
+        pyautogui.press("tab")
+        time.sleep(0.3)
+    pyautogui.press("space")
+    time.sleep(0.2)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome"), interval=0.12)
+    time.sleep(0.2)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj"), interval=0.12)
+    time.sleep(0.2)
+
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.3)
+
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
+    time.sleep(0.2)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.press("space")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade"), interval=0.12)
+    time.sleep(0.2)
+
+    pyautogui.press("enter")
+    time.sleep(0.3)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco"), interval=0.12)
+    time.sleep(0.2)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia"), interval=0.12)
+    time.sleep(0.2)
+
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.3)
+
+    pyautogui.press("enter")
+    time.sleep(0.3)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.press("enter")
+
+    pyautogui.hotkey("ctrl", "f")
+    pyautogui.write("SELECIONE...", interval=0.10)
+    pyautogui.press("esc")
+    pyautogui.press("enter")
+    pyautogui.write("FRETE", interval=0.10)
+    pyautogui.press("enter")
+    time.sleep(0.2)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo"), interval=0.12)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.press("enter")
+    time.sleep(0.2)
+
+    pyautogui.hotkey("ctrl", "f")
+    pyautogui.write("SELECIONE...", interval=0.10)
+    pyautogui.press("esc")
+    time.sleep(0.10)
+
+    for _ in range(5):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    pyautogui.write("1", interval=0.10)
+
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.10)
+
+    for _ in range(7):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.05)
+    pyautogui.press("tab")
+    time.sleep(0.05)
+    pyautogui.press("enter")
+    time.sleep(0.05)
+    pyautogui.press("tab")
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
     time.sleep(0.05)
     pyautogui.press("tab")
     time.sleep(0.05)
@@ -756,7 +871,7 @@ def main() -> None:
         time.sleep(1)
 
     # Prompt para DT
-    prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
+    prompt_text = profile.get_value("general", "dt_prompt_text")
     codigo = pyautogui.prompt(text=prompt_text, title="DT")
     if not codigo:
         pyautogui.alert("Nenhum código informado. O script foi pausado.")
@@ -771,7 +886,7 @@ def main() -> None:
     time.sleep(0.5)
 
     # Alerta com instruções (do perfil)
-    pyautogui.alert(profile.get_value("general", "alert_intro", "Baixe o arquivo XML antes de prosseguir."))
+    pyautogui.alert(profile.get_value("general", "alert_intro"))
     time.sleep(1)
 
     # Desativar Caps Lock
