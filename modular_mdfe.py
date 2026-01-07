@@ -113,14 +113,17 @@ def upload_latest_xml() -> None:
     pyautogui.press("enter")
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 30.0) -> None:
-    intervalo_inicial = 1.5
-    intervalo_maximo = 4.0
-    short_sleep = 0.15
+def wait_for_form(target_text: str, tempo_maximo: float = 40.0) -> None:
+    intervalo_inicial = 2.0
+    intervalo_maximo = 5.0
+    short_sleep = 0.2
     inicio = time.monotonic()
     target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
+    
+    # Textos alternativos para buscar
+    targets = [target_text, "Emissor MDF-e", "emitente", "Dados do MDF-e"]
 
-    log(f"Aguardando o formulário abrir (buscando '{target_text}')...")
+    log(f"Aguardando o formulário abrir (buscando '{target_text}' ou variantes)...")
     ultimo_conteudo = ""
     conteudo_anterior = ""
     confirmacoes_necessarias = 2
@@ -129,63 +132,78 @@ def wait_for_form(target_text: str, tempo_maximo: float = 30.0) -> None:
 
     while time.monotonic() - inicio < tempo_maximo:
         tentativa += 1
-        # Intervalo progressivo: aumenta a cada tentativa até o máximo
-        intervalo_atual = min(intervalo_inicial + (tentativa * 0.3), intervalo_maximo)
+        intervalo_atual = min(intervalo_inicial + (tentativa * 0.5), intervalo_maximo)
         
-        # Estratégias múltiplas de cópia para garantir captura
+        # Garantir que não está em nenhum campo de entrada
+        pyautogui.press("esc")
+        time.sleep(0.15)
+        
         conteudo = ""
         
-        # Estratégia 1: Limpar clipboard e copiar com delay maior
+        # Limpar clipboard
         try:
             pyperclip.copy("")
             time.sleep(0.1)
         except Exception:
             pass
 
-        # Tentar múltiplas vezes se necessário
-        for attempt in range(3):
+        # Tentar capturar conteúdo com múltiplas estratégias
+        for attempt in range(4):
             pyautogui.hotkey("ctrl", "a")
             time.sleep(short_sleep)
             pyautogui.hotkey("ctrl", "c")
-            time.sleep(short_sleep * 1.5)
+            time.sleep(short_sleep * 2)
 
             try:
                 conteudo = pyperclip.paste() or ""
-                if len(conteudo) > 50:  # Se capturou conteúdo relevante, sair
+                if len(conteudo) > 100:
                     break
             except Exception:
                 conteudo = ""
             
-            time.sleep(0.1)
+            time.sleep(0.15)
 
         ultimo_conteudo = conteudo
         conteudo_norm = re.sub(r"\s+", " ", conteudo).strip().lower()
-        log(f"Tentativa {tentativa}: Clipboard len={len(conteudo)}")
+        
+        # Mostrar preview do conteúdo capturado
+        preview = conteudo_norm[:150].replace("\n", " ") if conteudo_norm else "(vazio)"
+        log(f"Tentativa {tentativa}: {len(conteudo)} chars | Preview: {preview}")
 
-        if target_norm in conteudo_norm:
-            # Verificar se o conteúdo está estável (não está recarregando)
-            if conteudo == conteudo_anterior and len(conteudo) > 100:
+        # Verificar se algum dos textos alvo foi encontrado
+        encontrado = False
+        texto_encontrado = ""
+        for target in targets:
+            if re.sub(r"\s+", " ", target).strip().lower() in conteudo_norm:
+                encontrado = True
+                texto_encontrado = target
+                break
+
+        if encontrado:
+            # Verificar se o conteúdo está estável
+            if conteudo == conteudo_anterior and len(conteudo) > 200:
                 confirmacoes += 1
-                log(f"✓ Conteúdo estável ({confirmacoes}/{confirmacoes_necessarias})")
+                log(f"✓ '{texto_encontrado}' encontrado! Estável ({confirmacoes}/{confirmacoes_necessarias})")
                 if confirmacoes >= confirmacoes_necessarias:
-                    log("✓ Formulário detectado e estável!")
+                    log("✓ Formulário detectado e estável! Continuando...")
+                    time.sleep(0.5)
                     return
             else:
                 confirmacoes = 0
-                log(f"Formulário '{target_text}' detectado, aguardando estabilização...")
+                log(f"'{texto_encontrado}' detectado, mas conteúdo ainda mudando...")
             
             conteudo_anterior = conteudo
         else:
             confirmacoes = 0
             conteudo_anterior = ""
-            log(f"'{target_text}' não encontrado. Aguardando {intervalo_atual:.1f}s...")
+            log(f"Nenhum marcador encontrado. Esperando {intervalo_atual:.1f}s...")
 
         time.sleep(intervalo_atual)
 
-    log(f"✗ Tempo esgotado ao buscar '{target_text}' via Ctrl+A/C")
+    log(f"✗ Tempo esgotado ao buscar formulário")
     if ultimo_conteudo:
-        log("Conteúdo capturado:")
-        print(ultimo_conteudo[:500])
+        log("Último conteúdo capturado:")
+        print(ultimo_conteudo[:600])
     raise SystemExit(1)
 
 
