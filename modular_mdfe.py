@@ -296,9 +296,10 @@ def fill_mdfe(profile: ConfigProfile) -> None:
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
+    # ABRIR DADOS DO MODAL RODOVIÁRIO
     time.sleep(1)
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("modal rodo", interval=0.1)
+    pyautogui.write("modal rodo", interval=0.10)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.2)
@@ -308,20 +309,23 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
+    # RNTRC
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("RNTRC", interval=0.1)
+    pyautogui.write("RNTRC", interval=0.10)
     pyautogui.press("esc")
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc", "45501846"), interval=0.1)
-    pyautogui.press("tab")
-    for _ in range(5):
+    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc", "45501846"), interval=0.10)
+    
+    # NOME DO CONTRATANTE
+    for _ in range(6):
         pyautogui.press("tab")
         time.sleep(0.1)
     pyautogui.press("space")
-    time.sleep(0.2)
-
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome", "PEPSICO ITU"), interval=0.2)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome", "PEPSICO ITU"), interval=0.20)
+    time.sleep(0.1)
+
+    # CNPJ DO CONTRATATANTE
     pyautogui.press("tab")
     pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), interval=0.12)
     for _ in range(2):
@@ -332,8 +336,23 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
+    # ABRIR DADOS DE INFORMAÇÕES OPCIONAIS
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("ADICIONAIS", interval=0.1)
+    pyautogui.write("OPCIONAIS", interval=0.10)
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.1)
+    pyautogui.press("enter")
+    time.sleep(1)
+    pyautogui.press("esc")
+    time.sleep(0.5)
+    pyautogui.press("enter")
+    time.sleep(1)
+
+    # INFORMAÇÕES ADICIONAIS
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.5)
+    pyautogui.write("ADICIONAIS", interval=0.10)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
@@ -341,15 +360,17 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.5)
 
     pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("CONTRIBUINTE", interval=0.1)
+    time.sleep(0.5)
+    pyautogui.write("CONTRIBUINTE", interval=0.10)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.3)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj", "04898488000177"), interval=0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj", "04898488000177"), interval=0.10)
     pyautogui.press("tab")
+    time.sleep(0.3)
     pyautogui.press("enter")
 
     for _ in range(2):
@@ -358,19 +379,20 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write("CONTRA", interval=0.1)
+    pyautogui.write("CONTRA", interval=0.10)
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
     pyautogui.write(profile.get_value("informacoes_adicionais", "prestador_adicional", "02957518000224"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_nome", "SEGUROS SURA SA"), interval=0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_nome", "SEGUROS SURA SA"), interval=0.10)
     pyautogui.press("tab")
     pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_cnpj", "33065699000127"), interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_apolice", "5400035882"), interval=0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_apolice", "5400035882"), interval=0.10)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -383,18 +405,21 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write("PEPSICO DO BRASIL", interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome", "PEPSICO DO BRASIL"), interval=0.12)
     time.sleep(0.2)
+
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write("02957518000224", interval=0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj", "02957518000224"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.3)
+
     pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.12)
     time.sleep(0.2)
+
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("space")
@@ -408,10 +433,75 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.write(profile.get_value("informacoes_adicionais", "serie", "237"), interval=0.12)
     time.sleep(0.2)
+
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.write(profile.get_value("informacoes_adicionais", "numero_pedido", "2372/8"), interval=0.12)
     time.sleep(0.2)
+
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.3)
+
+    pyautogui.press("enter")
+    time.sleep(0.3)
+
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.press("enter")
+
+    pyautogui.hotkey("ctrl", "f")
+    pyautogui.write("SELECIONE...", interval=0.10)
+    pyautogui.press("esc")
+    pyautogui.press("enter")
+    pyautogui.write("FRETE", interval=0.10)
+    pyautogui.press("enter")
+    time.sleep(0.2)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.12)
+    time.sleep(0.2)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo", "FRETE"), interval=0.12)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.press("enter")
+    time.sleep(0.2)
+
+    pyautogui.hotkey("ctrl", "f")
+    pyautogui.write("SELECIONE...", interval=0.10)
+    pyautogui.press("esc")
+    time.sleep(0.10)
+
+    for _ in range(5):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    pyautogui.write("1", interval=0.10)
+
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    pyautogui.press("space")
+    time.sleep(0.10)
+
+    for _ in range(7):
+        pyautogui.press("tab")
+        time.sleep(0.05)
+    for _ in range(2):
+        pyautogui.press("space")
+        time.sleep(0.05)
+    pyautogui.press("tab")
+    time.sleep(0.05)
+    pyautogui.press("enter")
+    time.sleep(0.05)
+    pyautogui.press("tab")
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor", "1314.27"), interval=0.10)
+    time.sleep(0.05)
+    pyautogui.press("tab")
+    time.sleep(0.05)
+    pyautogui.press("enter")
+    time.sleep(1)
 
     for _ in range(2):
         pyautogui.press("tab")
@@ -457,10 +547,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(7):
         pyautogui.press("tab")
         time.sleep(0.05)
-    pyautogui.press("space")
-    time.sleep(0.05)
-    pyautogui.press("space")
-    time.sleep(0.05)
+    for _ in range(2):
+        pyautogui.press("space")
+        time.sleep(0.05)
     pyautogui.press("tab")
     time.sleep(0.05)
     pyautogui.press("enter")
