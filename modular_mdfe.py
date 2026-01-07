@@ -215,28 +215,25 @@ def navigate_to_mdfe() -> None:
     pyautogui.hotkey("ctrl", "3")
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "f")
-    type_value("EMITIR NOTA", 0.3)
+    pyautogui.write("EMITIR NOTA", interval=0.1)
     pyautogui.press("esc")
-    time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.2)
-    type_value("MDF-E", 0.1)
-    time.sleep(0.2)
+    pyautogui.write("MDF-E", interval=0.1)
     pyautogui.press("esc")
-    time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.8)
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
-    type_value("SELECIONE...", 0.2)
+    pyautogui.hotkey("ctrl", "f")
+    pyautogui.write("SELECIONE...", interval=0.2)
     pyautogui.press("esc")
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.2)
-    type_value(profile.get_value("mdfe", "prestador_tipo", "PRESTADOR"), 0.08)
+    pyautogui.write(profile.get_value("mdfe", "prestador_tipo", "PRESTADOR"), interval=0.1)
     time.sleep(0.5)
     pyautogui.press("enter")
     time.sleep(0.2)
@@ -245,7 +242,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
 
-    type_value(profile.get_value("mdfe", "emitente_codigo", "0315-60"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "emitente_codigo", "0315-60"), interval=0.1)
     pyautogui.press("enter")
     time.sleep(0.5)
     for _ in range(7):
@@ -254,19 +251,19 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
 
-    type_value(profile.get_value("mdfe", "uf_carregamento", "SP"), 0.2)
+    pyautogui.write(profile.get_value("mdfe", "uf_carregamento", "SP"), interval=0.2)
     pyautogui.press("enter")
     pyautogui.press("tab")
     time.sleep(0.5)
     pyautogui.press("space")
     time.sleep(0.2)
-    type_value(profile.get_value("mdfe", "uf_descarga", "SP"), 0.2)
+    pyautogui.write(profile.get_value("mdfe", "uf_descarga", "SP"), interval=0.2)
     pyautogui.press("enter")
     time.sleep(0.5)
 
     pyautogui.press("tab")
     time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "municipio_carregamento", "ITU"), 0.15)
+    pyautogui.write(profile.get_value("mdfe", "municipio_carregamento", "ITU").upper(), interval=0.15)
     time.sleep(0.3)
     for _ in range(4):
         pyautogui.press("down")
@@ -280,12 +277,12 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     pyautogui.press("space")
     time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "cep_origem", "13300340"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_origem", "13300340"), interval=0.1)
 
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "cep_destino", "13315000"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "cep_destino", "13315000"), interval=0.1)
     time.sleep(1)
 
     for _ in range(2):
@@ -305,7 +302,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         time.sleep(0.1)
     pyautogui.press("space")
     time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "unidade_medida", "1"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "unidade_medida", "1"), interval=0.1)
     pyautogui.press("enter")
 
     for _ in range(2):
@@ -315,17 +312,17 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     pyautogui.press("space")
     time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "carga_tipo", "05"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "carga_tipo", "05"), interval=0.1)
     pyautogui.press("enter")
 
     pyautogui.press("tab")
     time.sleep(0.05)
-    type_value(profile.get_value("mdfe", "codigo_produto_descricao", "PA/PALLET"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "codigo_produto_descricao", "PA/PALLET"), interval=0.1)
 
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
-    type_value(profile.get_value("mdfe", "ncm_primary", "19041000"), 0.1)
+    pyautogui.write(profile.get_value("mdfe", "ncm_primary", "19041000"), interval=0.1)
     pyautogui.press("enter")
 
     pyautogui.press("tab")
@@ -340,7 +337,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
 def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(1)
     pyautogui.hotkey("ctrl", "f")
-    type_value("modal rodo", 0.1)
+    pyautogui.write("modal rodo", interval=0.1)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.2)
@@ -351,10 +348,10 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(1)
 
     pyautogui.hotkey("ctrl", "f")
-    type_value("RNTRC", 0.1)
+    pyautogui.write("RNTRC", interval=0.1)
     pyautogui.press("esc")
     pyautogui.press("tab")
-    type_value(profile.get_value("modal_rodoviario", "rntrc", "45501846"), 0.1)
+    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc", "45501846"), interval=0.1)
     pyautogui.press("tab")
     for _ in range(5):
         pyautogui.press("tab")
@@ -363,9 +360,9 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(0.2)
 
     pyautogui.press("tab")
-    type_value(profile.get_value("modal_rodoviario", "contratante_nome", "PEPSICO ITU"), 0.2)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome", "PEPSICO ITU"), interval=0.2)
     pyautogui.press("tab")
-    type_value(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), 0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj", "02957518000224"), interval=0.12)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
@@ -375,7 +372,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
 
 def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.hotkey("ctrl", "f")
-    type_value("ADICIONAIS", 0.1)
+    pyautogui.write("ADICIONAIS", interval=0.1)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
@@ -383,14 +380,14 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.5)
 
     pyautogui.hotkey("ctrl", "f")
-    type_value("CONTRIBUINTE", 0.1)
+    pyautogui.write("CONTRIBUINTE", interval=0.1)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.3)
-    type_value(profile.get_value("informacoes_adicionais", "contribuinte_cnpj", "04898488000177"), 0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj", "04898488000177"), interval=0.1)
     pyautogui.press("tab")
     pyautogui.press("enter")
 
@@ -402,17 +399,17 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     pyautogui.press("space")
     time.sleep(0.2)
-    type_value("CONTRA", 0.1)
+    pyautogui.write("CONTRA", interval=0.1)
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    type_value(profile.get_value("informacoes_adicionais", "prestador_adicional", "02957518000224"), 0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "prestador_adicional", "02957518000224"), interval=0.12)
     pyautogui.press("tab")
-    type_value(profile.get_value("informacoes_adicionais", "terceiro_nome", "SEGUROS SURA SA"), 0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_nome", "SEGUROS SURA SA"), interval=0.1)
     pyautogui.press("tab")
-    type_value(profile.get_value("informacoes_adicionais", "terceiro_cnpj", "33065699000127"), 0.12)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_cnpj", "33065699000127"), interval=0.12)
     pyautogui.press("tab")
-    type_value(profile.get_value("informacoes_adicionais", "terceiro_apolice", "5400035882"), 0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "terceiro_apolice", "5400035882"), interval=0.1)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -466,10 +463,10 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
 
     pyautogui.hotkey("ctrl", "f")
-    type_value("SELECIONE...", 0.1)
+    pyautogui.write("SELECIONE...", interval=0.1)
     pyautogui.press("esc")
     pyautogui.press("enter")
-    type_value(profile.get_value("informacoes_adicionais", "frete_identificador", "FRETE"), 0.1)
+    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_identificador", "FRETE"), interval=0.1)
     pyautogui.press("enter")
     time.sleep(0.2)
 
@@ -526,22 +523,66 @@ def perform_averbacao() -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
+    # Buscar por OK, XML e ENVIAR
     for search in ("OK", "XML", "ENVIAR"):
         pyautogui.hotkey("ctrl", "f")
         time.sleep(0.5)
-        type_value(search, 0.1)
+        pyautogui.write(search, interval=0.1)
         time.sleep(0.5)
         pyautogui.press("esc")
         time.sleep(0.2)
         pyautogui.press("enter")
         time.sleep(0.5)
 
+    # Upload do arquivo XML
+    upload_latest_xml()
+    time.sleep(0.5)
+
+    # Extrair e copiar número de averbação
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(0.3)
+    pyautogui.hotkey("ctrl", "c")
+    time.sleep(0.5)
+
+    conteudo = pyperclip.paste()
+    linhas = conteudo.splitlines()
+    numero_averbacao = None
+    for linha in linhas:
+        if "Número de Averbação:" in linha:
+            match = re.search(r"Número de Averbação:\s*([\d]+)", linha)
+            if match:
+                numero_averbacao = match.group(1)
+                break
+
+    if numero_averbacao:
+        log(f"Número de Averbação encontrado: {numero_averbacao}")
+        pyperclip.copy(numero_averbacao)
+    else:
+        log("Não foi possível localizar o número de Averbação")
+
+    time.sleep(0.5)
+    pyautogui.hotkey("alt", "tab")
+    time.sleep(1)
+
+    # Preencher detalhes na outra aba
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.5)
+    pyautogui.write("DETALHES", interval=0.1)
+    time.sleep(0.3)
+    pyautogui.press("esc")
+    pyautogui.press("enter")
+    time.sleep(0.5)
     for _ in range(2):
-        pyautogui.hotkey("ctrl", "f")
+        pyautogui.press("tab")
         time.sleep(0.5)
-        type_value("INVOISYS", 0.1)
-        pyautogui.press("esc")
-        time.sleep(0.2)
+    time.sleep(0.5)
+    pyautogui.hotkey("ctrl", "v")
+    pyautogui.press("tab")
+    time.sleep(0.5)
+    pyautogui.press("enter")
+    time.sleep(1)
+
+    # Buscar INVOISYS para coletar DT e CTE
     pyautogui.hotkey("ctrl", "shift", "a")
     time.sleep(0.5)
     pyautogui.write("INVOISYS", interval=0.1)
@@ -552,30 +593,35 @@ def perform_averbacao() -> None:
     time.sleep(1)
 
     pyautogui.hotkey("ctrl", "f")
-    type_value("e final", 0.2)
+    pyautogui.write("e final", interval=0.2)
     pyautogui.press("esc")
     time.sleep(0.2)
 
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.1)
+
+    time.sleep(0.5)
+
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "c")
-
+    time.sleep(0.5)
     pyautogui.hotkey("alt", "tab")
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.5)
-    type_value("CONTRIBUINTE", 0.1)
+    pyautogui.write("CONTRIBUINTE", interval=0.1)
+    time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.5)
     pyautogui.press("tab")
     time.sleep(0.5)
-    type_value("DT: ", 0.1)
+    pyautogui.write("DT: ", interval=0.1)
+    time.sleep(0.3)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.5)
-    type_value(" CTE: ", 0.1)
+    pyautogui.write(" CTE: ", interval=0.1)
     time.sleep(0.5)
     pyautogui.hotkey("alt", "tab")
     time.sleep(0.5)
@@ -593,7 +639,7 @@ def perform_averbacao() -> None:
     numero_cte = None
     for linha in linhas:
         if "100 - Autorizado o uso do CT-e.N" in linha:
-            match = re.search(r"100\s*-\s*Autorizado o uso do CT-e\\.N[^\d]*(\d{6})", linha)
+            match = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
             if match:
                 numero_cte = match.group(1)
                 break
@@ -608,11 +654,14 @@ def perform_averbacao() -> None:
     time.sleep(0.5)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(0.5)
-    type_value(" NF: ", 0.1)
+    pyautogui.write(" NF: ", interval=0.1)
     time.sleep(0.5)
 
 
 def main() -> None:
+    # Sleep inicial para aguardar inicialização
+    time.sleep(0.7)
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
     args = parser.parse_args()
@@ -626,22 +675,44 @@ def main() -> None:
         profile_path = CONFIG_DIR / DEFAULT_PROFILE
 
     profile = ConfigProfile(profile_path)
+    
+    # Abrir navegador
     pyautogui.hotkey("winleft", "1")
     time.sleep(1)
+    
+    # GAP - Pressionar ESC 2x
     for _ in range(2):
         pyautogui.press("esc")
         time.sleep(0.3)
 
-    # Recarregar a aba 3 uma vez no início
+    # Recarregar aba 3
     pyautogui.hotkey("ctrl", "3")
     time.sleep(0.5)
     pyautogui.press("f5")
-    time.sleep(2)
-    
-    # Voltar para a aba 1
+    time.sleep(1)
+
+    # Voltar para aba 1 (2x como no legado)
+    pyautogui.hotkey("ctrl", "1")
+    time.sleep(1)
     pyautogui.hotkey("ctrl", "1")
     time.sleep(0.5)
 
+    # Pesquisar e posicionar em "e final"
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.2)
+    type_value("e final", 0.1)
+    time.sleep(0.2)
+    pyautogui.press("esc")
+    time.sleep(0.2)
+
+    # Tab 2x como no legado
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.1)
+
+    time.sleep(0.5)
+
+    # Prompt para DT
     prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
     codigo = pyautogui.prompt(text=prompt_text, title="DT")
     if not codigo:
@@ -649,37 +720,35 @@ def main() -> None:
         pyautogui.FAILSAFE = True
         return
     
-    # Localizar o campo "NUMERO DO DT" via Ctrl+F, Tab para acessá-lo e colar o código
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.3)
-    type_value("NUMERO DO DT", 0.3)
-    time.sleep(0.3)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.1)
+    # Escrever código DT e dar enter 2x como no legado
+    pyautogui.write(codigo.upper(), interval=0.1)
     pyautogui.press("enter")
-    time.sleep(0.2)
-    pyautogui.press("esc")
-    time.sleep(0.2)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.2)
-    pyperclip.copy(codigo.upper())
-    pyautogui.hotkey("ctrl", "v") 
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.5)
 
-    pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir: baixe o XML e mantenha as abas abertas."))
+    # Alerta com instruções
+    pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n2. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
+    
+    time.sleep(1)
 
+    # Desativar Caps Lock
     ensure_caps_off()
+    
+    # Ir para página 3 - MDF
+    pyautogui.hotkey("ctrl", "3")
+    time.sleep(0.5)
+    
+    # Aguardar formulário
     navigate_to_mdfe()
     wait_for_form("Dados do MDF-e")
+    
+    # Preencher formulário
     fill_mdfe(profile)
     fill_modal_rodo(profile)
     fill_additional_info(profile)
     perform_averbacao()
+    
     pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
 
 
