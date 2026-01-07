@@ -64,7 +64,7 @@ class ConfigProfile:
         if current_mtime != self._mtime:
             self.reload()
 
-    def get_value(self, section: str, key: str, default: str) -> str:
+    def get_value(self, section: str, key: str, default: str = "") -> str:
         self.ensure_current()
         return self._data.get(section.upper(), {}).get(key.lower(), default)
 
@@ -844,34 +844,28 @@ def main() -> None:
     pyautogui.press("f5")
     time.sleep(1)
 
-    # Voltar para aba 1
+    # Voltar para aba 1 (2x como no script teste funcional)
+    pyautogui.hotkey("ctrl", "1")
+    time.sleep(1)
     pyautogui.hotkey("ctrl", "1")
     time.sleep(0.5)
     
-    # Pesquisar "empresa" (workflow TESTES)
+    # Pesquisar e posicionar em "e final" (como no script teste funcional)
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(1)
-    pyautogui.write("empresa", interval=0.10)
+    time.sleep(0.2)
+    pyautogui.write("e final", interval=0.1)
     pyautogui.press("esc")
-    time.sleep(0.5)
+    time.sleep(0.2)
     
-    # Validar aba CTE (workflow TESTES) - 4s timeout, 2 copy attempts
-    wait_for_form("notas emitidas: ct-e", tempo_maximo=4.0, intervalo=1.0, copy_attempts=2)
-    time.sleep(1)
-    
-    # Pesquisar "serie final" para posicionar DT
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(2)
-    pyautogui.write("serie final", interval=0.12)
-    pyautogui.press("esc")
-    time.sleep(0.5)
-    
+    # Tab 2x como no script teste funcional
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(1)
+        time.sleep(0.1)
+    
+    time.sleep(0.5)
 
     # Prompt para DT
-    prompt_text = profile.get_value("general", "dt_prompt_text")
+    prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
     codigo = pyautogui.prompt(text=prompt_text, title="DT")
     if not codigo:
         pyautogui.alert("Nenhum código informado. O script foi pausado.")
@@ -886,7 +880,7 @@ def main() -> None:
     time.sleep(0.5)
 
     # Alerta com instruções (do perfil)
-    pyautogui.alert(profile.get_value("general", "alert_intro"))
+    pyautogui.alert(profile.get_value("general", "alert_intro", "Baixe o arquivo XML antes de prosseguir."))
     time.sleep(1)
 
     # Desativar Caps Lock
