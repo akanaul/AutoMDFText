@@ -598,8 +598,6 @@ def main() -> None:
     time.sleep(0.3)
     type_value("NUMERO DO DT", 0.3)
     time.sleep(0.3)
-    pyautogui.press("esc")
-    time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyperclip.copy(codigo.upper())
