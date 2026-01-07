@@ -561,29 +561,25 @@ def perform_averbacao() -> None:
 
     # Upload do arquivo XML
     upload_latest_xml()
-    time.sleep(0.5)
+    time.sleep(2)
 
     # Extrair e copiar número de averbação
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.3)
+    time.sleep(0.2)
     pyautogui.hotkey("ctrl", "c")
-    time.sleep(0.5)
+    time.sleep(0.2)
 
-    conteudo = pyperclip.paste()
-    linhas = conteudo.splitlines()
-    numero_averbacao = None
-    for linha in linhas:
-        if "Número de Averbação:" in linha:
-            match = re.search(r"Número de Averbação:\s*([\d]+)", linha)
-            if match:
-                numero_averbacao = match.group(1)
-                break
+    texto = pyperclip.paste()
 
-    if numero_averbacao:
-        log(f"Número de Averbação encontrado: {numero_averbacao}")
+    # Extrai somente os números da linha "Número de Averbação"
+    match = re.search(r'Número de Averbação:\s*([\d]+)', texto)
+    if match:
+        numero_averbacao = match.group(1)
+        # Coloca somente os números da averbação de volta na área de transferência
         pyperclip.copy(numero_averbacao)
+        print("Número de Averbação copiado:", numero_averbacao)
     else:
-        log("Não foi possível localizar o número de Averbação")
+        print("Número de Averbação não encontrado")
 
     time.sleep(0.5)
     pyautogui.hotkey("alt", "tab")
