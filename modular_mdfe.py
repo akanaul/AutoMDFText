@@ -217,13 +217,17 @@ def navigate_to_mdfe() -> None:
     pyautogui.hotkey("ctrl", "f")
     pyautogui.write("EMITIR NOTA", interval=0.1)
     pyautogui.press("esc")
+    time.sleep(0.1)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(0.2)
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.2)
     pyautogui.write("MDF-E", interval=0.1)
+    time.sleep(0.2)
     pyautogui.press("esc")
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.8)
+    time.sleep(0.7)
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
