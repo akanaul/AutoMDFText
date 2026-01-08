@@ -83,21 +83,25 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
     print("Enter para usar o template padrão (ou digite o número)")
     choice = input("Opção: ").strip()
     
+    selected_profile = default
+    if choice:
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(interactive_list):
+                selected_profile = interactive_list[index]
+        elif choice in interactive_list:
+            selected_profile = choice
+        else:
+            log("Opção inválida; usando o template padrão.")
+    
     # Fechar o terminal após seleção
     if os.name == 'nt':  # Windows
-        import subprocess
-        subprocess.Popen('cmd /C "timeout /t 1 >nul & exit"', shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        import ctypes
+        import sys
+        kernel32 = ctypes.windll.kernel32
+        kernel32.FreeConsole()
     
-    if not choice:
-        return default
-    if choice.isdigit():
-        index = int(choice) - 1
-        if 0 <= index < len(interactive_list):
-            return interactive_list[index]
-    if choice in interactive_list:
-        return choice
-    log("Opção inválida; usando o template padrão.")
-    return default
+    return selected_profile
 
 
 def ensure_caps_off() -> None:
@@ -184,34 +188,44 @@ def navigate_to_mdfe() -> None:
     """Navega para o formulário MDF-e - cópia exata do script legado"""
     # IR PARA 3ª PAGINA - MDF
     pyautogui.hotkey("ctrl", "3")
-    time.sleep(0.5)
+    time.sleep(1)
 
     # ABRIR DADOS DO MDF-E
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
     pyautogui.write("EMITIR NOTA", interval=0.10)
+    time.sleep(0.2)
     pyautogui.press("esc")
+    time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(1)
     
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
     pyautogui.write("MDF-E", interval=0.10)
+    time.sleep(0.2)
     pyautogui.press("esc")
+    time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(0.8)
+    time.sleep(1.5)
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
     """Preenche dados do MDF-e - cópia exata do script legado"""
+    time.sleep(1)
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
     pyautogui.write("SELECIONE...", interval=0.20)
+    time.sleep(0.2)
     pyautogui.press("esc")
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.write(profile.get_value("mdfe", "prestador_tipo"), interval=0.1)
     time.sleep(0.5)
     pyautogui.press("enter")
+    time.sleep(0.3)
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
@@ -220,29 +234,33 @@ def fill_mdfe(profile: ConfigProfile) -> None:
 
     # EMITENTE
     pyautogui.write(profile.get_value("mdfe", "emitente_codigo"), interval=0.10)
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(0.7)
 
     for _ in range(7):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.press("space")
-    time.sleep(0.2)
+    time.sleep(0.3)
 
     # UF CARREGAMENTO E DESCARREGAMENTO
     pyautogui.write(profile.get_value("mdfe", "uf_carregamento"), interval=0.20)
+    time.sleep(0.2)
     pyautogui.press("enter")
+    time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.5)
     pyautogui.press("space")
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.write(profile.get_value("mdfe", "uf_descarga"), interval=0.20)
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(0.7)
 
     # MUNICIPIO DE CARREGAMENTO
     pyautogui.press("tab")
-    time.sleep(0.1)
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("mdfe", "municipio_carregamento").upper(), interval=0.15)
     time.sleep(0.3)
 
@@ -253,54 +271,67 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         pyautogui.press("up")
         time.sleep(0.1)
     pyautogui.press("enter")
-    time.sleep(0.2)
+    time.sleep(0.3)
 
     # UPLOAD DO ARQUIVO XML
     for _ in range(2):
         pyautogui.press("tab")
+        time.sleep(0.1)
     pyautogui.press("space")
     time.sleep(2)
     upload_latest_xml()
-    time.sleep(0.3)
+    time.sleep(0.5)
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(2)
+    time.sleep(2.5)
 
     # UNIDADE DE MEDIDA
     for _ in range(5):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.press("space")
-    time.sleep(0.1)
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("mdfe", "unidade_medida"), interval=0.1)
+    time.sleep(0.2)
     pyautogui.press("enter")
+    time.sleep(0.3)
 
     # TIPO DE CARGA
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.press("space")
+    time.sleep(0.2)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(0.1)
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("mdfe", "carga_tipo"), interval=0.1)
+    time.sleep(0.2)
     pyautogui.press("enter")
+    time.sleep(0.3)
 
     # DESCRIÇÃO DO PRODUTO
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("mdfe", "produto_descricao"), interval=0.1)
+    time.sleep(0.2)
+    pyautogui.write(profile.get_value("mdfe", "codigo_produto_descricao"), interval=0.1)
+    time.sleep(0.2)
 
     # CÓDIGO NCM
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
+    
+    ncm_primary = profile.get_value("mdfe", "ncm_primary", "19041000")
+    ncm_secondary = profile.get_value("mdfe", "ncm_secondary", "19059090")
+    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary", "20052000")
     
     opcao = pyautogui.confirm(
         text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
         title='Escolha de NCM',
-        buttons=['19041000', '19059090', '20052000', 'Outro código', 'Cancelar']
+        buttons=[ncm_primary, ncm_secondary, ncm_tertiary, 'Outro código', 'Cancelar']
     )
 
     if opcao == 'Cancelar':
@@ -317,60 +348,78 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         codigo = opcao
     
     pyautogui.write(codigo.upper(), interval=0.1)
+    time.sleep(0.2)
     pyautogui.press("enter")
+    time.sleep(0.3)
 
     # CEP ORIGEM
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.press("space")
+    time.sleep(0.2)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("mdfe", "cep_origem"), interval=0.1)
+    time.sleep(0.3)
 
     # CEP DESTINO
     for _ in range(3):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.write(profile.get_value("mdfe", "cep_destino"), interval=0.1)
-    time.sleep(1)
+    time.sleep(1.5)
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
     # ABRIR DADOS DO MODAL RODOVIÁRIO
-    time.sleep(1)
+    time.sleep(1.5)
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
     pyautogui.write("modal rodo", interval=0.10)
+    time.sleep(0.2)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(1.5)
     pyautogui.press("esc")
+    time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(1.5)
 
     # RNTRC
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
     pyautogui.write("RNTRC", interval=0.10)
+    time.sleep(0.2)
     pyautogui.press("esc")
+    time.sleep(0.3)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("modal_rodoviario", "rntrc"), interval=0.10)
+    time.sleep(0.2)
     
     # NOME DO CONTRATANTE
     for _ in range(6):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.press("space")
+    time.sleep(0.2)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.20)
-    time.sleep(0.1)
+    time.sleep(0.2)
 
     # CNPJ DO CONTRATATANTE
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
+    time.sleep(0.2)
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(1.5)
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
@@ -443,12 +492,12 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
@@ -509,35 +558,37 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.hotkey("ctrl", "f")
     pyautogui.write("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
-    time.sleep(0.10)
+    time.sleep(0.3)
 
     for _ in range(5):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.write("1", interval=0.10)
+    time.sleep(0.15)
 
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(0.10)
+    time.sleep(0.2)
 
     for _ in range(7):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("space")
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("tab")
-    time.sleep(0.05)
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.05)
+    time.sleep(0.3)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("tab")
-    time.sleep(0.05)
+    time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(1)
     time.sleep(0.2)
@@ -562,12 +613,12 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_nome"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "retentor_cnpj"), interval=0.12)
+    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
@@ -629,33 +680,35 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     for _ in range(5):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.write("1", interval=0.10)
+    time.sleep(0.15)
 
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(0.10)
+    time.sleep(0.2)
 
     for _ in range(7):
         pyautogui.press("tab")
-        time.sleep(0.05)
+        time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("space")
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("tab")
-    time.sleep(0.05)
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.05)
+    time.sleep(0.3)
     pyautogui.press("tab")
+    time.sleep(0.2)
     pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
-    time.sleep(0.05)
+    time.sleep(0.15)
     pyautogui.press("tab")
-    time.sleep(0.05)
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(1.5)
 
 
 def perform_averbacao() -> None:
@@ -846,21 +899,22 @@ def main() -> None:
 
     # Voltar para aba 1 (2x como no script teste funcional)
     pyautogui.hotkey("ctrl", "1")
-    time.sleep(1)
+    time.sleep(1.5)
     pyautogui.hotkey("ctrl", "1")
-    time.sleep(0.5)
+    time.sleep(1)
     
     # Pesquisar e posicionar em "e final" (como no script teste funcional)
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.write("e final", interval=0.1)
+    time.sleep(0.3)
     pyautogui.press("esc")
-    time.sleep(0.2)
+    time.sleep(0.3)
     
     # Tab 2x como no script teste funcional
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.15)
     
     time.sleep(0.5)
 
@@ -874,13 +928,14 @@ def main() -> None:
     
     # Escrever código DT e dar enter 2x
     pyautogui.write(codigo.upper(), interval=0.1)
+    time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.5)
 
     # Alerta com instruções (do perfil)
-    pyautogui.alert(profile.get_value("general", "alert_intro", "Baixe o arquivo XML antes de prosseguir."))
+    pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
     time.sleep(1)
 
     # Desativar Caps Lock
