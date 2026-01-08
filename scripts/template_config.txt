@@ -38,5 +38,6 @@ frete_identificador = FRETE
 numero_banco = 237
 agencia = 2372/8
 forma_pagamento = 1
+numero_parcelas = 1
 
 template_note = Se faltar alguma entrada use um comentário com # para anotar o que deve ir em seguida.

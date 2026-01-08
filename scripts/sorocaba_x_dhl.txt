@@ -33,3 +33,4 @@ frete_identificador = FRETE
 numero_banco = 237
 agencia = 2372/8
 forma_pagamento = 1
+numero_parcelas = 1
