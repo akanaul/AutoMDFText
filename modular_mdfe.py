@@ -711,8 +711,12 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(1.5)
 
 
-def perform_averbacao(numero_cte: str = "") -> None:
-    """Executa a averbação usando CT-e já capturado no início (se disponível)."""
+def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
+    """Executa a averbação e preenche DT/CT-e no final.
+    - Usa CT-e capturado no início quando disponível, sem voltar à primeira página
+    - Em fallback, captura CT-e na INVOISYS sem atrelar ou sobrescrever o DT
+    """
+    # Abrir site/aba de averbação e enviar XML
     pyautogui.hotkey("ctrl", "shift", "a")
     time.sleep(0.5)
     pyautogui.write("ATM", interval=0.1)
@@ -722,7 +726,6 @@ def perform_averbacao(numero_cte: str = "") -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
-    # Buscar por OK, XML e ENVIAR
     for search in ("OK", "XML", "ENVIAR"):
         pyautogui.hotkey("ctrl", "f")
         time.sleep(0.5)
@@ -733,23 +736,18 @@ def perform_averbacao(numero_cte: str = "") -> None:
         pyautogui.press("enter")
         time.sleep(0.5)
 
-    # Upload do arquivo XML
     upload_latest_xml()
     time.sleep(2)
 
-    # Extrair e copiar número de averbação
+    # Extrair número de averbação e copiar apenas os dígitos
     pyautogui.hotkey("ctrl", "a")
     time.sleep(0.2)
     pyautogui.hotkey("ctrl", "c")
     time.sleep(0.2)
-
     texto = pyperclip.paste()
-
-    # Extrai somente os números da linha "Número de Averbação"
-    match = re.search(r'Número de Averbação:\s*([\d]+)', texto)
+    match = re.search(r"Número de Averbação:\s*([\d]+)", texto)
     if match:
         numero_averbacao = match.group(1)
-        # Coloca somente os números da averbação de volta na área de transferência
         pyperclip.copy(numero_averbacao)
         print("Número de Averbação copiado:", numero_averbacao)
     else:
@@ -777,117 +775,82 @@ def perform_averbacao(numero_cte: str = "") -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
-    # Buscar INVOISYS para coletar DT e CTE
-    pyautogui.hotkey("ctrl", "shift", "a")
-    time.sleep(0.5)
-    pyautogui.write("INVOISYS", interval=0.1)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.5)
-    pyautogui.press("enter")
-    time.sleep(1)
-
+    # Preencher DT/CT-e/NF na área de CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.5)
-    pyautogui.write("e final", interval=0.20)
+    pyautogui.write("CONTRIBUINTE", interval=0.1)
+    time.sleep(0.3)
     pyautogui.press("esc")
-    time.sleep(0.2)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.1)
-
+    time.sleep(0.5)
+    pyautogui.press("tab")
     time.sleep(0.5)
 
-    # Se CT-e já foi capturado no início, usar direto (já está no clipboard)
-    # Se não, tentar copiar daqui
+    # DT sempre vem do prompt (numero_dt) capturado no início
+    pyautogui.write("DT: ", interval=0.1)
+    time.sleep(0.3)
+    if numero_dt:
+        pyperclip.copy(numero_dt)
+        pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.5)
+
+    # CT-e: se já temos do início, usar direto; caso contrário, fallback
+    pyautogui.write(" CTE: ", interval=0.1)
+    time.sleep(0.5)
     if numero_cte:
         log(f"Usando CT-e capturado no início: {numero_cte}")
-        # Ainda na página INVOISYS: copiar apenas o campo "e final" (serie final) já focado
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.3)
-        dt_val = pyperclip.paste() or ""
-
-        # Ir para a outra aba/janela para preencher DT/CT-e
-        pyautogui.hotkey("alt", "tab")
-        time.sleep(0.5)
-        pyautogui.hotkey("ctrl", "f")
-        time.sleep(0.5)
-        pyautogui.write("CONTRIBUINTE", interval=0.1)
-        time.sleep(0.3)
-        pyautogui.press("esc")
-        time.sleep(0.5)
-        pyautogui.press("tab")
-        time.sleep(0.5)
-        pyautogui.write("DT: ", interval=0.1)
-        time.sleep(0.3)
-        pyperclip.copy(dt_val)
-        pyautogui.hotkey("ctrl", "v")
-        time.sleep(0.5)
-        pyautogui.write(" CTE: ", interval=0.1)
-        time.sleep(0.5)
         pyperclip.copy(numero_cte)
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.5)
-        pyautogui.write(" NF: ", interval=0.1)
-        time.sleep(0.5)
     else:
-        log("CT-e não foi capturado no início, tentando novamente (lógica antiga)...")
-        # Lógica antiga: copiar todo o conteúdo da página INVOISYS e extrair
-        pyautogui.hotkey("ctrl", "a")
+        log("CT-e ausente; iniciando fallback na INVOISYS para capturar.")
+        pyautogui.hotkey("ctrl", "shift", "a")
         time.sleep(0.5)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.5)
-        pyautogui.hotkey("alt", "tab")
-        time.sleep(0.5)
-        pyautogui.hotkey("ctrl", "f")
-        time.sleep(0.5)
-        pyautogui.write("CONTRIBUINTE", interval=0.1)
-        time.sleep(0.3)
-        pyautogui.press("esc")
-        time.sleep(0.5)
-        pyautogui.press("tab")
-        time.sleep(0.5)
-        pyautogui.write("DT: ", interval=0.1)
-        time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "v")
-        time.sleep(0.5)
-        pyautogui.write(" CTE: ", interval=0.1)
-        time.sleep(0.5)
-        pyautogui.hotkey("alt", "tab")
-        time.sleep(0.5)
-
+        pyautogui.write("INVOISYS", interval=0.1)
         for _ in range(2):
             pyautogui.press("tab")
-            time.sleep(0.3)
-        # Seleciona tudo e copia
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.5)
+        pyautogui.press("enter")
         time.sleep(1)
 
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.5)
+        pyautogui.write("e final", interval=0.2)
+        pyautogui.press("esc")
+        time.sleep(0.2)
+        for _ in range(2):
+            pyautogui.press("tab")
+            time.sleep(0.1)
+        time.sleep(0.5)
+
+        # Copiar página e extrair CT-e
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(0.5)
         conteudo = pyperclip.paste()
         linhas = conteudo.splitlines()
+        numero_cte_local = ""
         for linha in linhas:
             if "100 - Autorizado o uso do CT-e.N" in linha:
-                match = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
-                if match:
-                    numero_cte = match.group(1)
+                m = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
+                if m:
+                    numero_cte_local = m.group(1)
                     break
 
-        if numero_cte:
-            log(f"Número do CT-e encontrado (fallback): {numero_cte}")
-            pyperclip.copy(numero_cte)
-        else:
-            log("Não foi possível localizar o número do CT-e (fallback)")
-
+        # Voltar para a aba de preenchimento e colar somente CT-e se encontrado
         pyautogui.hotkey("alt", "tab")
         time.sleep(0.5)
-        pyautogui.hotkey("ctrl", "v")
+        if numero_cte_local:
+            log(f"Número do CT-e encontrado (fallback): {numero_cte_local}")
+            pyperclip.copy(numero_cte_local)
+            pyautogui.hotkey("ctrl", "v")
+        else:
+            log("Não foi possível localizar o número do CT-e (fallback); deixar em branco.")
         time.sleep(0.5)
-        pyautogui.write(" NF: ", interval=0.1)
+
+    # Finalizar com rótulo NF
+    pyautogui.write(" NF: ", interval=0.1)
+    time.sleep(0.5)
 
 
 def main() -> None:
@@ -1003,7 +966,7 @@ def main() -> None:
         fill_mdfe(profile)
         fill_modal_rodo(profile)
         fill_additional_info(profile)
-        perform_averbacao(numero_cte)
+        perform_averbacao(numero_cte, codigo)
         
         pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
     except Exception as e:
