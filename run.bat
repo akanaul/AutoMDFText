@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+title AutoMDFText - MDF-e Toolkit
 
 set "PYTHON=python"
 for %%i in (py py.exe) do (
@@ -17,6 +18,13 @@ if not defined PYTHON_FOUND (
 )
 set "SCRIPTS_DIR=%~dp0scripts"
 if not exist "%SCRIPTS_DIR%" mkdir "%SCRIPTS_DIR%"
+
+REM Startup guard: block duplicate run.bat windows and active automation
+set "THISBAT=%~f0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $t='AutoMDFText - MDF-e Toolkit'; $wins = Get-Process -EA SilentlyContinue | Where-Object { $_.MainWindowTitle -eq $t }; if ($wins.Count -gt 1) { Write-Host 'Já existe outra janela do toolkit aberta. Fechando este terminal...'; exit 1 } else { exit 0 } } catch { exit 0 }"
+IF ERRORLEVEL 1 goto :EOF
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $bat = '%~f0'; $name = [System.IO.Path]::GetFileName($bat); $runs = Get-CimInstance Win32_Process -EA SilentlyContinue ^| Where-Object { $_.Name -match 'cmd(\\d+)?\\.exe' -and $_.CommandLine -like ('*' + $name + '*') }; if ($runs.Count -gt 1) { Write-Host 'Já existe outra instância do run.bat aberta. Fechando este terminal...'; exit 1 }; $auto = Get-CimInstance Win32_Process -EA SilentlyContinue ^| Where-Object { $_.Name -match 'python(\\d+)?\\.exe' -and $_.CommandLine -match 'modular_mdfe\\.py' }; if ($auto) { Write-Host 'Automação já em execução. Use a janela existente.'; exit 1 }; exit 0 } catch { exit 0 }"
+IF ERRORLEVEL 1 goto :EOF
 
 :prompt
 cls
@@ -48,6 +56,9 @@ goto prompt
 
 :modular
 echo Running modular MDF-e filler. Press Ctrl+C to abort.
+REM Guard before launching, ensure no existing automation is running
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p = Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'modular_mdfe\.py' }; if ($p) { Write-Host 'Automação já em execução. Retornando ao menu...'; exit 1 } else { exit 0 } } catch { exit 0 }"
+IF ERRORLEVEL 1 goto prompt
 %PYTHON% modular_mdfe.py
 goto prompt
 

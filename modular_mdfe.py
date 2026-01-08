@@ -21,6 +21,9 @@ DEFAULT_PROFILE = "template_config.txt"
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
+# Handle for single-instance mutex to keep it alive during process lifetime
+_SINGLETON_MUTEX_HANDLE = None
+
 
 def log(msg: str) -> None:
     ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
@@ -93,6 +96,31 @@ def hide_console_window() -> None:
         return
     # Apenas oculta o console para evitar encerramento do processo durante o debug
     ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+
+
+def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate: str = "warn") -> None:
+    """Impede execução duplicada usando um Mutex nomeado do Windows.
+    Se já existir outra instância:
+    - on_duplicate == 'warn': exibe alerta e encerra este processo
+    - on_duplicate == 'kill': encerra este processo (equivale a matar o duplicado)
+    """
+    if os.name != "nt":
+        return
+    kernel32 = ctypes.windll.kernel32
+    # CreateMutexW(lpMutexAttributes, bInitialOwner, lpName)
+    handle = kernel32.CreateMutexW(None, False, name)
+    last_error = kernel32.GetLastError()
+    if last_error == 183:  # ERROR_ALREADY_EXISTS
+        try:
+            if on_duplicate == "warn":
+                pyautogui.alert("Já existe uma instância em execução. O processo será encerrado.")
+        except Exception:
+            pass
+        raise SystemExit(0)
+    else:
+        # Manter handle vivo para não liberar o mutex
+        global _SINGLETON_MUTEX_HANDLE
+        _SINGLETON_MUTEX_HANDLE = handle
 
 
 def choose_profile(interactive_list: list[str], default: str) -> str:
@@ -677,9 +705,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(5):
         pyautogui.press("tab")
         time.sleep(0.2)
-    frete_id = profile.get_value("informacoes_adicionais", "frete_identificador", "1")
-    log(f"Preenchendo FRETE IDENTIFICADOR: {frete_id}")
-    pyautogui.write(frete_id, interval=0.10)
+    numero_parcelas = profile.get_value("informacoes_adicionais", "numero_parcelas", "1")
+    log(f"Preenchendo NUMERO PARCELAS: {numero_parcelas}")
+    pyautogui.write(numero_parcelas, interval=0.10)
     time.sleep(0.15)
 
     for _ in range(2):
@@ -858,6 +886,8 @@ def main() -> None:
         # Sleep inicial para aguardar inicialização
         time.sleep(0.7)
         log("Iniciando automação (main)")
+        # Impedir execução duplicada
+        ensure_single_instance()
         
         parser = argparse.ArgumentParser()
         parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
