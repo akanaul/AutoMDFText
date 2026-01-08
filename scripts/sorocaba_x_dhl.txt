@@ -16,7 +16,6 @@ cep_origem = 18087101
 cep_destino = 13315000
 unidade_medida = 1
 carga_tipo = 05
-quantidade_unidade = 1
 
 [MODAL_RODOVIARIO]
 rntrc = 45501846
@@ -33,3 +32,4 @@ frete_tipo = FRETE
 frete_identificador = FRETE
 numero_banco = 237
 agencia = 2372/8
+forma_pagamento = 1

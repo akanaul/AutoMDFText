@@ -9,6 +9,7 @@ venv/
 
 # Logs and databases
 *.log
+logs/
 *.sqlite3
 
 # Distribution

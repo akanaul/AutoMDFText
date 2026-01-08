@@ -2,7 +2,6 @@ import argparse
 import ctypes
 import os
 import re
-import subprocess
 import time
 from pathlib import Path
 
@@ -12,14 +11,27 @@ import pyperclip
 
 pyautogui.FAILSAFE = True
 
-CONFIG_DIR = Path(__file__).parent / "scripts"
+BASE_DIR = Path(__file__).parent
+CONFIG_DIR = BASE_DIR / "scripts"
+LOG_DIR = BASE_DIR / "logs"
 CONFIG_DIR.mkdir(exist_ok=True)
+LOG_DIR.mkdir(exist_ok=True)
 DEFAULT_PROFILE = "template_config.txt"
+# Log por sessão (timestamp) para facilitar debug
+SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
 
 def log(msg: str) -> None:
     ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}")
+    line = f"[{ts}] {msg}"
+    print(line)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        # Não interromper fluxo por falha de log em disco
+        pass
 
 
 def parse_profile(path: Path) -> dict[str, dict[str, str]]:
@@ -73,7 +85,18 @@ def list_profiles() -> list[str]:
     return sorted(p.name for p in CONFIG_DIR.glob("*.txt"))
 
 
+def hide_console_window() -> None:
+    if os.name != "nt":
+        return
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    if not hwnd:
+        return
+    # Apenas oculta o console para evitar encerramento do processo durante o debug
+    ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
+
+
 def choose_profile(interactive_list: list[str], default: str) -> str:
+    log("Iniciando seleção de perfil")
     if not interactive_list:
         log("Nenhum script disponível; usando o template padrão.")
         return default
@@ -94,14 +117,8 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
         else:
             log("Opção inválida; usando o template padrão.")
     
-    # Fechar o terminal após seleção
-    if os.name == 'nt':  # Windows
-        # Obter handle da janela do console
-        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-        if hwnd:
-            # Enviar mensagem WM_CLOSE para fechar a janela
-            WM_CLOSE = 0x0010
-            ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+    # Fechar/ocultar o terminal após seleção (com fallback em caso de WM_CLOSE falhar)
+    hide_console_window()
     
     return selected_profile
 
@@ -112,6 +129,40 @@ def ensure_caps_off() -> None:
     if caps_state & 1:
         ctypes.windll.user32.keybd_event(VK_CAPITAL, 0, 0, 0)
         ctypes.windll.user32.keybd_event(VK_CAPITAL, 0, 2, 0)
+
+
+def _get_foreground_title() -> str:
+    """Retorna o título da janela em foco (minimiza uso de Win+1 desnecessário)."""
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetForegroundWindow()
+    length = user32.GetWindowTextLengthW(hwnd)
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buffer, length + 1)
+    return buffer.value or ""
+
+
+def focus_browser_if_needed() -> None:
+    """Só pressiona Win+1 se o navegador não estiver em foco, evitando minimizar."""
+    title = _get_foreground_title().lower()
+    if any(k in title for k in ("chrome", "edge", "navegador", "invoisys")):
+        log("Navegador já em foco; Win+1 ignorado para evitar minimizar.")
+        return
+    log("Navegador fora de foco; acionando Win+1.")
+    pyautogui.hotkey("winleft", "1")
+    time.sleep(1)
+
+
+def extract_cte_from_content(conteudo: str) -> str:
+    """Extrai o número do CT-e do conteúdo capturado."""
+    linhas = conteudo.splitlines()
+    for linha in linhas:
+        # Padrão: "100 - Autorizado o uso do CT-e.N" seguido de número com 6 dígitos
+        if "100 - Autorizado o uso do CT-e" in linha:
+            # Extrai 6 dígitos consecutivos após "CT-e"
+            match = re.search(r'CT-e\.?[^\d]*(\d{6})', linha)
+            if match:
+                return match.group(1)
+    return ""
 
 
 def upload_latest_xml() -> None:
@@ -126,34 +177,36 @@ def upload_latest_xml() -> None:
     pyautogui.press("enter")
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 3.0, copy_attempts: int = 3) -> None:
-    """Aguarda o formulário abrir detectando texto específico - cópia do script legado"""
-    short_sleep = 0.12        # pausa curta entre ações de cópia
-    
+
+
+
+def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 1.0, copy_attempts: int = 2) -> str:
+    """Aguarda o formulário abrir detectando texto específico (lógica do legado).
+    Retorna o conteúdo do clipboard capturado quando o formulário é encontrado."""
+    short_sleep = 0.12
+
     inicio = time.monotonic()
     ultimo_conteudo = ""
     target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
 
-    log("Aguardando o formulário abrir...")
+    log(f"Aguardando o formulário abrir... alvo='{target_text}', timeout={tempo_maximo}s")
     attempt = 0
 
     while time.monotonic() - inicio < tempo_maximo:
         attempt += 1
         try:
-            # limpa a área de transferência para evitar ler conteúdo antigo
+            log(f"Tentativa {attempt}: limpando clipboard e copiando")
             try:
                 pyperclip.copy("")
             except Exception as e:
                 log(f"Aviso: não foi possível limpar clipboard: {e}")
 
-            # realiza várias tentativas rápidas de selecionar/copiar
-            for i in range(copy_attempts):
-                pyautogui.hotkey("ctrl", "a")   # selecionar tudo
+            for _ in range(copy_attempts):
+                pyautogui.hotkey("ctrl", "a")
                 time.sleep(short_sleep)
-                pyautogui.hotkey("ctrl", "c")   # copiar
+                pyautogui.hotkey("ctrl", "c")
                 time.sleep(short_sleep)
 
-            # lê o conteúdo
             try:
                 conteudo = pyperclip.paste() or ""
             except Exception as e:
@@ -167,9 +220,10 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
 
             if target_norm in conteudo_norm:
                 log("Formulário detectado!")
+                log(f"Conteúdo capturado (preview): {conteudo[:200]}")
                 log("Continuando com o restante da automação...")
                 time.sleep(0.8)
-                return
+                return conteudo
 
             log(f"Não encontrado. Aguardando {intervalo}s antes da próxima tentativa.")
             time.sleep(intervalo)
@@ -178,7 +232,6 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
             log(f"Erro interno durante a tentativa: {e}")
             time.sleep(intervalo)
 
-    # tempo esgotado
     log(f"Formulário não foi detectado dentro de {tempo_maximo} segundos. Encerrando o processo.")
     if ultimo_conteudo:
         log("Último conteúdo capturado (preview):")
@@ -195,6 +248,7 @@ def navigate_to_mdfe() -> None:
     # ABRIR DADOS DO MDF-E
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
+    log("Procurando por 'EMITIR NOTA'")
     pyautogui.write("EMITIR NOTA", interval=0.10)
     time.sleep(0.2)
     pyautogui.press("esc")
@@ -204,6 +258,7 @@ def navigate_to_mdfe() -> None:
     
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
+    log("Procurando por 'MDF-E'")
     pyautogui.write("MDF-E", interval=0.10)
     time.sleep(0.2)
     pyautogui.press("esc")
@@ -218,6 +273,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
+    log(f"Preenchendo PRESTADOR DE SERVIÇO: {profile.get_value('mdfe', 'prestador_tipo')}")
     pyautogui.write("SELECIONE...", interval=0.20)
     time.sleep(0.2)
     pyautogui.press("esc")
@@ -235,7 +291,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
 
     # EMITENTE
-    pyautogui.write(profile.get_value("mdfe", "emitente_codigo"), interval=0.10)
+    emitente = profile.get_value("mdfe", "emitente_codigo")
+    log(f"Preenchendo EMITENTE: {emitente}")
+    pyautogui.write(emitente, interval=0.10)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.7)
@@ -247,7 +305,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.3)
 
     # UF CARREGAMENTO E DESCARREGAMENTO
-    pyautogui.write(profile.get_value("mdfe", "uf_carregamento"), interval=0.20)
+    uf_car = profile.get_value("mdfe", "uf_carregamento")
+    log(f"Preenchendo UF CARREGAMENTO: {uf_car}")
+    pyautogui.write(uf_car, interval=0.20)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -255,7 +315,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.5)
     pyautogui.press("space")
     time.sleep(0.3)
-    pyautogui.write(profile.get_value("mdfe", "uf_descarga"), interval=0.20)
+    uf_desc = profile.get_value("mdfe", "uf_descarga")
+    log(f"Preenchendo UF DESCARGA: {uf_desc}")
+    pyautogui.write(uf_desc, interval=0.20)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.7)
@@ -263,7 +325,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     # MUNICIPIO DE CARREGAMENTO
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "municipio_carregamento").upper(), interval=0.15)
+    municipio = profile.get_value("mdfe", "municipio_carregamento").upper()
+    log(f"Preenchendo MUNICIPIO CARREGAMENTO: {municipio}")
+    pyautogui.write(municipio, interval=0.15)
     time.sleep(0.3)
 
     for _ in range(4):
@@ -295,7 +359,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         time.sleep(0.15)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "unidade_medida"), interval=0.1)
+    unidade = profile.get_value("mdfe", "unidade_medida")
+    log(f"Preenchendo UNIDADE MEDIDA: {unidade}")
+    pyautogui.write(unidade, interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -310,7 +376,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "carga_tipo"), interval=0.1)
+    carga = profile.get_value("mdfe", "carga_tipo")
+    log(f"Preenchendo TIPO CARGA: {carga}")
+    pyautogui.write(carga, interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -318,7 +386,9 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     # DESCRIÇÃO DO PRODUTO
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "codigo_produto_descricao"), interval=0.1)
+    descricao = profile.get_value("mdfe", "codigo_produto_descricao")
+    log(f"Preenchendo DESCRIÇÃO PRODUTO: {descricao}")
+    pyautogui.write(descricao, interval=0.1)
     time.sleep(0.2)
 
     # CÓDIGO NCM
@@ -361,14 +431,18 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("mdfe", "cep_origem"), interval=0.1)
+    cep_orig = profile.get_value("mdfe", "cep_origem")
+    log(f"Preenchendo CEP ORIGEM: {cep_orig}")
+    pyautogui.write(cep_orig, interval=0.1)
     time.sleep(0.3)
 
     # CEP DESTINO
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.15)
-    pyautogui.write(profile.get_value("mdfe", "cep_destino"), interval=0.1)
+    cep_dest = profile.get_value("mdfe", "cep_destino")
+    log(f"Preenchendo CEP DESTINO: {cep_dest}")
+    pyautogui.write(cep_dest, interval=0.1)
     time.sleep(1.5)
 
 
@@ -377,6 +451,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(1.5)
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
+    log("Procurando por 'modal rodo'")
     pyautogui.write("modal rodo", interval=0.10)
     time.sleep(0.2)
     for _ in range(2):
@@ -398,7 +473,9 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "rntrc"), interval=0.10)
+    rntrc = profile.get_value("modal_rodoviario", "rntrc")
+    log(f"Preenchendo RNTRC: {rntrc}")
+    pyautogui.write(rntrc, interval=0.10)
     time.sleep(0.2)
     
     # NOME DO CONTRATANTE
@@ -409,13 +486,17 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.20)
+    contratante = profile.get_value("modal_rodoviario", "contratante_nome")
+    log(f"Preenchendo CONTRATANTE: {contratante}")
+    pyautogui.write(contratante, interval=0.20)
     time.sleep(0.2)
 
     # CNPJ DO CONTRATATANTE
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
+    cnpj_cont = profile.get_value("modal_rodoviario", "contratante_cnpj")
+    log(f"Preenchendo CNPJ CONTRATANTE: {cnpj_cont}")
+    pyautogui.write(cnpj_cont, interval=0.12)
     time.sleep(0.2)
     for _ in range(2):
         pyautogui.press("tab")
@@ -427,6 +508,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
 def fill_additional_info(profile: ConfigProfile) -> None:
     # ABRIR DADOS DE INFORMAÇÕES OPCIONAIS
     pyautogui.hotkey("ctrl", "f")
+    log("Procurando por 'OPCIONAIS'")
     pyautogui.write("OPCIONAIS", interval=0.10)
     for _ in range(2):
         pyautogui.press("tab")
@@ -441,6 +523,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     # INFORMAÇÕES ADICIONAIS
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.5)
+    log("Procurando por 'ADICIONAIS'")
     pyautogui.write("ADICIONAIS", interval=0.10)
     time.sleep(0.3)
     pyautogui.press("esc")
@@ -457,7 +540,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.3)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "contribuinte_cnpj"), interval=0.10)
+    cnpj_contrib = profile.get_value("informacoes_adicionais", "contribuinte_cnpj")
+    log(f"Preenchendo CONTRIBUINTE CNPJ: {cnpj_contrib}")
+    pyautogui.write(cnpj_contrib, interval=0.10)
     pyautogui.press("tab")
     time.sleep(0.3)
     pyautogui.press("enter")
@@ -475,13 +560,21 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
+    cnpj_cont2 = profile.get_value("modal_rodoviario", "contratante_cnpj")
+    log(f"Preenchendo CNPJ CONTRATANTE (CONTRA): {cnpj_cont2}")
+    pyautogui.write(cnpj_cont2, interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_nome"), interval=0.10)
+    seguradora = profile.get_value("informacoes_adicionais", "seguradora_nome")
+    log(f"Preenchendo SEGURADORA: {seguradora}")
+    pyautogui.write(seguradora, interval=0.10)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj"), interval=0.12)
+    cnpj_seg = profile.get_value("informacoes_adicionais", "seguradora_cnpj")
+    log(f"Preenchendo CNPJ SEGURADORA: {cnpj_seg}")
+    pyautogui.write(cnpj_seg, interval=0.12)
     pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice"), interval=0.10)
+    apolice = profile.get_value("informacoes_adicionais", "numero_apolice")
+    log(f"Preenchendo NUMERO APOLICE: {apolice}")
+    pyautogui.write(apolice, interval=0.10)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -494,38 +587,52 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.12)
+    contratante2 = profile.get_value("modal_rodoviario", "contratante_nome")
+    log(f"Preenchendo CONTRATANTE (2): {contratante2}")
+    pyautogui.write(contratante2, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
+    cnpj_cont3 = profile.get_value("modal_rodoviario", "contratante_cnpj")
+    log(f"Preenchendo CNPJ CONTRATANTE (2): {cnpj_cont3}")
+    pyautogui.write(cnpj_cont3, interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.3)
 
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
+    frete_val = profile.get_value("informacoes_adicionais", "frete_valor")
+    log(f"Preenchendo FRETE VALOR: {frete_val}")
+    pyautogui.write(frete_val, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade"), interval=0.12)
+    forma_pag = profile.get_value("informacoes_adicionais", "forma_pagamento")
+    log(f"Preenchendo FORMA PAGAMENTO: {forma_pag}")
+    pyautogui.write(forma_pag, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("enter")
     time.sleep(0.3)
+
+    # Garantir que o foco chegue no campo "Número do banco" (antes de agência)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco"), interval=0.12)
+    numero_banco = profile.get_value("informacoes_adicionais", "numero_banco")
+    log(f"Preenchendo NUMERO BANCO: {numero_banco}")
+    pyautogui.write(numero_banco, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia"), interval=0.12)
+    agencia = profile.get_value("informacoes_adicionais", "agencia")
+    log(f"Preenchendo AGENCIA: {agencia}")
+    pyautogui.write(agencia, interval=0.12)
     time.sleep(0.2)
 
     for _ in range(2):
@@ -543,15 +650,20 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.write("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
     pyautogui.press("enter")
+    log("Preenchendo seção FRETE")
     pyautogui.write("FRETE", interval=0.10)
     pyautogui.press("enter")
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
+    frete_val2 = profile.get_value("informacoes_adicionais", "frete_valor")
+    log(f"Preenchendo FRETE VALOR (seção): {frete_val2}")
+    pyautogui.write(frete_val2, interval=0.12)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo"), interval=0.12)
+    frete_tipo = profile.get_value("informacoes_adicionais", "frete_tipo")
+    log(f"Preenchendo FRETE TIPO: {frete_tipo}")
+    pyautogui.write(frete_tipo, interval=0.12)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -565,7 +677,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(5):
         pyautogui.press("tab")
         time.sleep(0.2)
-    pyautogui.write("1", interval=0.10)
+    frete_id = profile.get_value("informacoes_adicionais", "frete_identificador", "1")
+    log(f"Preenchendo FRETE IDENTIFICADOR: {frete_id}")
+    pyautogui.write(frete_id, interval=0.10)
     time.sleep(0.15)
 
     for _ in range(2):
@@ -587,7 +701,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
+    frete_val3 = profile.get_value("informacoes_adicionais", "frete_valor")
+    log(f"Preenchendo FRETE VALOR (final): {frete_val3}")
+    pyautogui.write(frete_val3, interval=0.10)
     time.sleep(0.15)
     pyautogui.press("tab")
     time.sleep(0.2)
@@ -595,7 +711,8 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(1.5)
 
 
-def perform_averbacao() -> None:
+def perform_averbacao(numero_cte: str = "") -> None:
+    """Executa a averbação usando CT-e já capturado no início (se disponível)."""
     pyautogui.hotkey("ctrl", "shift", "a")
     time.sleep(0.5)
     pyautogui.write("ATM", interval=0.1)
@@ -682,160 +799,216 @@ def perform_averbacao() -> None:
 
     time.sleep(0.5)
 
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.5)
-    pyautogui.hotkey("ctrl", "c")
-    time.sleep(0.5)
-    pyautogui.hotkey("alt", "tab")
-    time.sleep(0.5)
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.5)
-    pyautogui.write("CONTRIBUINTE", interval=0.1)
-    time.sleep(0.3)
-    pyautogui.press("esc")
-    time.sleep(0.5)
-    pyautogui.press("tab")
-    time.sleep(0.5)
-    pyautogui.write("DT: ", interval=0.1)
-    time.sleep(0.3)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.5)
-    pyautogui.write(" CTE: ", interval=0.1)
-    time.sleep(0.5)
-    pyautogui.hotkey("alt", "tab")
-    time.sleep(0.5)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-    # Seleciona tudo e copia
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.3)
-    pyautogui.hotkey("ctrl", "c")
-    time.sleep(1)
-
-    conteudo = pyperclip.paste()
-    linhas = conteudo.splitlines()
-    numero_cte = None
-    for linha in linhas:
-        if "100 - Autorizado o uso do CT-e.N" in linha:
-            match = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
-            if match:
-                numero_cte = match.group(1)
-                break
-
+    # Se CT-e já foi capturado no início, usar direto (já está no clipboard)
+    # Se não, tentar copiar daqui
     if numero_cte:
-        log(f"Número do CT-e encontrado: {numero_cte}")
-        pyperclip.copy(numero_cte)
-    else:
-        log("Não foi possível localizar o número do CT-e")
+        log(f"Usando CT-e capturado no início: {numero_cte}")
+        # Ainda na página INVOISYS: copiar apenas o campo "e final" (serie final) já focado
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.3)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(0.3)
+        dt_val = pyperclip.paste() or ""
 
-    pyautogui.hotkey("alt", "tab")
-    time.sleep(0.5)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.5)
-    pyautogui.write(" NF: ", interval=0.1)
-    time.sleep(0.5)
+        # Ir para a outra aba/janela para preencher DT/CT-e
+        pyautogui.hotkey("alt", "tab")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.5)
+        pyautogui.write("CONTRIBUINTE", interval=0.1)
+        time.sleep(0.3)
+        pyautogui.press("esc")
+        time.sleep(0.5)
+        pyautogui.press("tab")
+        time.sleep(0.5)
+        pyautogui.write("DT: ", interval=0.1)
+        time.sleep(0.3)
+        pyperclip.copy(dt_val)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.5)
+        pyautogui.write(" CTE: ", interval=0.1)
+        time.sleep(0.5)
+        pyperclip.copy(numero_cte)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.5)
+        pyautogui.write(" NF: ", interval=0.1)
+        time.sleep(0.5)
+    else:
+        log("CT-e não foi capturado no início, tentando novamente (lógica antiga)...")
+        # Lógica antiga: copiar todo o conteúdo da página INVOISYS e extrair
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(0.5)
+        pyautogui.hotkey("alt", "tab")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(0.5)
+        pyautogui.write("CONTRIBUINTE", interval=0.1)
+        time.sleep(0.3)
+        pyautogui.press("esc")
+        time.sleep(0.5)
+        pyautogui.press("tab")
+        time.sleep(0.5)
+        pyautogui.write("DT: ", interval=0.1)
+        time.sleep(0.3)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.5)
+        pyautogui.write(" CTE: ", interval=0.1)
+        time.sleep(0.5)
+        pyautogui.hotkey("alt", "tab")
+        time.sleep(0.5)
+
+        for _ in range(2):
+            pyautogui.press("tab")
+            time.sleep(0.3)
+        # Seleciona tudo e copia
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.3)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(1)
+
+        conteudo = pyperclip.paste()
+        linhas = conteudo.splitlines()
+        for linha in linhas:
+            if "100 - Autorizado o uso do CT-e.N" in linha:
+                match = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
+                if match:
+                    numero_cte = match.group(1)
+                    break
+
+        if numero_cte:
+            log(f"Número do CT-e encontrado (fallback): {numero_cte}")
+            pyperclip.copy(numero_cte)
+        else:
+            log("Não foi possível localizar o número do CT-e (fallback)")
+
+        pyautogui.hotkey("alt", "tab")
+        time.sleep(0.5)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.5)
+        pyautogui.write(" NF: ", interval=0.1)
 
 
 def main() -> None:
-    # Sleep inicial para aguardar inicialização
-    time.sleep(0.7)
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
-    args = parser.parse_args()
+    try:
+        # Sleep inicial para aguardar inicialização
+        time.sleep(0.7)
+        log("Iniciando automação (main)")
+        
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
+        args = parser.parse_args()
 
-    selected = args.profile
-    if not selected:
-        selected = choose_profile(list_profiles(), DEFAULT_PROFILE)
-    profile_path = CONFIG_DIR / selected
-    if not profile_path.exists():
-        log(f"Perfil {profile_path} não encontrado, usando template")
-        profile_path = CONFIG_DIR / DEFAULT_PROFILE
+        selected = args.profile
+        if not selected:
+            selected = choose_profile(list_profiles(), DEFAULT_PROFILE)
+        log(f"Perfil selecionado: {selected}")
+        profile_path = CONFIG_DIR / selected
+        if not profile_path.exists():
+            log(f"Perfil {profile_path} não encontrado, usando template")
+            profile_path = CONFIG_DIR / DEFAULT_PROFILE
 
-    profile = ConfigProfile(profile_path)
-    
-    # Alerta ANTES de abrir navegador (workflow TESTES)
-    pyautogui.alert(
-        'ANTES DE PROSSEGUIR:\n\n'
-        '1. Mantenha 3 abas do Invoisys abertas e o site de averbação logado;\n'
-        '2. Deixe o navegador como o primeiro app na barra do Windows;\n'
-        '3. Mantenha apenas uma janela do navegador ativa.\n\n'
-        'OBS: Para interromper o código, mova o mouse repetidamente para o canto superior direito da tela.'
-    )
-    time.sleep(1)
-    
-    # Abrir navegador
-    pyautogui.hotkey("winleft", "1")
-    time.sleep(1)
-    
-    # GAP - Pressionar ESC 2x
-    for _ in range(2):
+        profile = ConfigProfile(profile_path)
+        log(f"Perfil carregado de: {profile_path}")
+
+        # Alerta ANTES de abrir navegador (herdado do legado)
+        log("Exibindo alerta inicial")
+        pyautogui.alert(
+            'ANTES DE PROSSEGUIR:\n\n'
+            '1. Mantenha 3 abas do Invoisys abertas e o site de averbação logado;\n'
+            '2. Deixe o navegador como o primeiro app na barra do Windows;\n'
+            '3. Mantenha apenas uma janela do navegador ativa.\n\n'
+            'OBS: Para interromper o código, mova o mouse repetidamente para o canto superior direito da tela.'
+        )
+        time.sleep(1)
+        
+        # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
+        log("Focando navegador (evitando minimizar)")
+        focus_browser_if_needed()
+        
+        # GAP - Pressionar ESC 2x
+        log("Enviando ESC x2")
+        for _ in range(2):
+            pyautogui.press("esc")
+            time.sleep(0.3)
+
+        # Recarregar aba 3
+        log("Recarregando aba 3 (Ctrl+3, F5)")
+        pyautogui.hotkey("ctrl", "3")
+        time.sleep(0.5)
+        pyautogui.press("f5")
+        time.sleep(1)
+
+        # Voltar para aba 1 (uma vez, como no legado)
+        log("Voltando para aba 1 e focando em 'empresa'")
+        pyautogui.hotkey("ctrl", "1")
+        time.sleep(0.5)
+        # Buscar "empresa" para garantir foco correto
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(1)
+        pyautogui.write("empresa", interval=0.10)
         pyautogui.press("esc")
+        time.sleep(0.5)
+
+        # Detectar primeira tela (CT-e) como no legado
+        log("Detectando tela CT-e (notas emitidas: ct-e)")
+        conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
+        log("Página CT-e detectada. Extraindo CT-e do conteúdo capturado...")
+        numero_cte = extract_cte_from_content(conteudo_cte_pagina)
+        if numero_cte:
+            log(f"CT-e extraído com sucesso no início: {numero_cte}")
+            pyperclip.copy(numero_cte)
+        else:
+            log("Aviso: Não foi possível extrair CT-e do conteúdo inicial. Tentaremos novamente ao final.")
+
+        # Posicionar em "serie final" e Tab 2x
+        log("Posicionando em 'serie final' e tabulando")
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(2)
+        pyautogui.write("serie final", interval=0.12)
+        pyautogui.press("esc")
+        time.sleep(0.5)
+        for _ in range(2):
+            pyautogui.press("tab")
+            time.sleep(1)
+        # Prompt para DT
+        prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
+        codigo = pyautogui.prompt(text=prompt_text, title="DT")
+        if not codigo:
+            pyautogui.alert("Nenhum código informado. O script foi pausado.")
+            pyautogui.FAILSAFE = True
+            return
+        
+        # Escrever código DT e dar enter 2x
+        pyautogui.write(codigo.upper(), interval=0.1)
         time.sleep(0.3)
+        pyautogui.press("enter")
+        time.sleep(0.3)
+        pyautogui.press("enter")
+        time.sleep(0.5)
 
-    # Recarregar aba 3
-    pyautogui.hotkey("ctrl", "3")
-    time.sleep(0.5)
-    pyautogui.press("f5")
-    time.sleep(1)
+        # Alerta com instruções (do perfil)
+        pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
+        time.sleep(1)
 
-    # Voltar para aba 1 (2x como no script teste funcional)
-    pyautogui.hotkey("ctrl", "1")
-    time.sleep(1.5)
-    pyautogui.hotkey("ctrl", "1")
-    time.sleep(1)
-    
-    # Pesquisar e posicionar em "e final" (como no script teste funcional)
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.3)
-    pyautogui.write("e final", interval=0.1)
-    time.sleep(0.3)
-    pyautogui.press("esc")
-    time.sleep(0.3)
-    
-    # Tab 2x como no script teste funcional
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.15)
-    
-    time.sleep(0.5)
-
-    # Prompt para DT
-    prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
-    codigo = pyautogui.prompt(text=prompt_text, title="DT")
-    if not codigo:
-        pyautogui.alert("Nenhum código informado. O script foi pausado.")
-        pyautogui.FAILSAFE = True
-        return
-    
-    # Escrever código DT e dar enter 2x
-    pyautogui.write(codigo.upper(), interval=0.1)
-    time.sleep(0.3)
-    pyautogui.press("enter")
-    time.sleep(0.3)
-    pyautogui.press("enter")
-    time.sleep(0.5)
-
-    # Alerta com instruções (do perfil)
-    pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
-    time.sleep(1)
-
-    # Desativar Caps Lock
-    ensure_caps_off()
-    
-    # Aguardar formulário - navegação e detecção do MDF-e
-    navigate_to_mdfe()
-    wait_for_form("Emissor MDF-e")
-    
-    # Preencher formulário
-    fill_mdfe(profile)
-    fill_modal_rodo(profile)
-    fill_additional_info(profile)
-    perform_averbacao()
-    
-    pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
+        # Desativar Caps Lock
+        ensure_caps_off()
+        
+        # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
+        navigate_to_mdfe()
+        wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
+        
+        # Preencher formulário
+        fill_mdfe(profile)
+        fill_modal_rodo(profile)
+        fill_additional_info(profile)
+        perform_averbacao(numero_cte)
+        
+        pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
+    except Exception as e:
+        log(f"ERRO FATAL: {e}")
+        raise
 
 
 if __name__ == "__main__":
