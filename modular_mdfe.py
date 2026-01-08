@@ -169,15 +169,39 @@ def _get_foreground_title() -> str:
     return buffer.value or ""
 
 
+def _get_foreground_class() -> str:
+    """Retorna a classe da janela em foco para identificar navegadores com mais confiabilidade."""
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return ""
+    buffer = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, buffer, 256)
+    return buffer.value or ""
+
+
 def focus_browser_if_needed() -> None:
     """Só pressiona Win+1 se o navegador não estiver em foco, evitando minimizar."""
     title = _get_foreground_title().lower()
-    if any(k in title for k in ("chrome", "edge", "navegador", "invoisys")):
+    cls = _get_foreground_class().lower()
+    title_hits = ("chrome", "edge", "navegador", "invoisys", "google chrome", "microsoft edge")
+    class_hits = ("chrome_widgetwin_1", "applicationframewindow", "windows.ui.core.corewindow")
+
+    if any(k in title for k in title_hits) or (cls in class_hits):
         log("Navegador já em foco; Win+1 ignorado para evitar minimizar.")
         return
-    log("Navegador fora de foco; acionando Win+1.")
+
+    log("Navegador fora de foco; tentando Win+1.")
     pyautogui.hotkey("winleft", "1")
     time.sleep(1)
+
+    # Pós-checagem: se ainda não estiver em foco, tentar fallback suave
+    title2 = _get_foreground_title().lower()
+    cls2 = _get_foreground_class().lower()
+    if any(k in title2 for k in title_hits) or (cls2 in class_hits):
+        log("Navegador em foco após Win+1.")
+        return
+    log("Win+1 não focou o navegador; evitando minimizar e mantendo estado.")
 
 
 def extract_cte_from_content(conteudo: str) -> str:
@@ -718,17 +742,17 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     for _ in range(7):
         pyautogui.press("tab")
-        time.sleep(0.2)
+        time.sleep(0.4)
     pyautogui.press("space")
-    time.sleep(0.15)
+    time.sleep(0.3)
     pyautogui.press("space")
-    time.sleep(0.15)
+    time.sleep(0.3)
     pyautogui.press("tab")
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    time.sleep(0.2)
+    time.sleep(0.3)
     frete_val3 = profile.get_value("informacoes_adicionais", "frete_valor")
     log(f"Preenchendo FRETE VALOR (final): {frete_val3}")
     pyautogui.write(frete_val3, interval=0.10)
