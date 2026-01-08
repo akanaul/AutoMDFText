@@ -97,9 +97,12 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
     # Fechar o terminal após seleção
     if os.name == 'nt':  # Windows
         import ctypes
-        import sys
-        kernel32 = ctypes.windll.kernel32
-        kernel32.FreeConsole()
+        # Obter handle da janela do console
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            # Enviar mensagem WM_CLOSE para fechar a janela
+            WM_CLOSE = 0x0010
+            ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
     
     return selected_profile
 
