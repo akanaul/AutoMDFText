@@ -96,7 +96,6 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
     
     # Fechar o terminal após seleção
     if os.name == 'nt':  # Windows
-        import ctypes
         # Obter handle da janela do console
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if hwnd:
@@ -562,124 +561,6 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.write("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
     time.sleep(0.3)
-
-    for _ in range(5):
-        pyautogui.press("tab")
-        time.sleep(0.2)
-    pyautogui.write("1", interval=0.10)
-    time.sleep(0.15)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.2)
-    pyautogui.press("space")
-    time.sleep(0.2)
-
-    for _ in range(7):
-        pyautogui.press("tab")
-        time.sleep(0.2)
-    pyautogui.press("space")
-    time.sleep(0.15)
-    pyautogui.press("space")
-    time.sleep(0.15)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-    time.sleep(0.3)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.10)
-    time.sleep(0.15)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-    time.sleep(1)
-    time.sleep(0.2)
-    pyautogui.write("CONTRA", interval=0.10)
-    pyautogui.press("enter")
-    time.sleep(0.3)
-    pyautogui.press("tab")
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
-    pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "seguradora_cnpj"), interval=0.12)
-    pyautogui.press("tab")
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_apolice"), interval=0.10)
-    pyautogui.press("tab")
-    pyautogui.press("enter")
-    time.sleep(0.3)
-
-    for _ in range(4):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-    pyautogui.press("space")
-    time.sleep(0.2)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_nome"), interval=0.12)
-    time.sleep(0.2)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("modal_rodoviario", "contratante_cnpj"), interval=0.12)
-    time.sleep(0.2)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_valor"), interval=0.12)
-    time.sleep(0.2)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("space")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "quantidade_unidade"), interval=0.12)
-    time.sleep(0.2)
-
-    pyautogui.press("enter")
-    time.sleep(0.3)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "numero_banco"), interval=0.12)
-    time.sleep(0.2)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "agencia"), interval=0.12)
-    time.sleep(0.2)
-
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-
-    pyautogui.press("enter")
-    time.sleep(0.3)
-
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-
-    pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("SELECIONE...", interval=0.10)
-    pyautogui.press("esc")
-    pyautogui.press("enter")
-    pyautogui.write("FRETE", interval=0.10)
-    pyautogui.press("enter")
-    time.sleep(0.2)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.write(profile.get_value("informacoes_adicionais", "frete_tipo"), interval=0.12)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    pyautogui.press("enter")
-    time.sleep(0.2)
-
-    pyautogui.hotkey("ctrl", "f")
-    pyautogui.write("SELECIONE...", interval=0.10)
-    pyautogui.press("esc")
-    time.sleep(0.10)
 
     for _ in range(5):
         pyautogui.press("tab")
