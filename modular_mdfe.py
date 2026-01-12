@@ -224,7 +224,7 @@ def upload_latest_xml() -> None:
         pyautogui.alert("A pasta Downloads está vazia!")
         return
     latest_file = max(list_of_files, key=os.path.getctime)
-    pyautogui.write(str(latest_file), interval=0.05)
+    pyautogui.write(str(latest_file), interval=0.10)
     time.sleep(0.3)
     pyautogui.press("enter")
 
@@ -316,7 +316,7 @@ def navigate_to_mdfe() -> None:
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.2)
 
 
 def fill_mdfe(profile: ConfigProfile) -> None:
@@ -364,7 +364,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    time.sleep(0.5)
+    time.sleep(0.4)
     pyautogui.press("space")
     time.sleep(0.3)
     uf_desc = profile.get_value("mdfe", "uf_descarga")
@@ -394,7 +394,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     # UPLOAD DO ARQUIVO XML
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.1)
+        time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(2)
     upload_latest_xml()
@@ -495,7 +495,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     cep_dest = profile.get_value("mdfe", "cep_destino")
     log(f"Preenchendo CEP DESTINO: {cep_dest}")
     pyautogui.write(cep_dest, interval=0.1)
-    time.sleep(1.5)
+    time.sleep(1.25)
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
@@ -633,7 +633,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     for _ in range(4):
         pyautogui.press("tab")
-        time.sleep(0.3)
+        time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(0.2)
 
@@ -701,9 +701,12 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.hotkey("ctrl", "f")
     pyautogui.write("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
+    time.sleep(0.2)
     pyautogui.press("enter")
+    time.sleep(0.2)
     log("Preenchendo seção FRETE")
     pyautogui.write("FRETE", interval=0.10)
+    time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.2)
     pyautogui.press("tab")
@@ -711,6 +714,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     frete_val2 = profile.get_value("informacoes_adicionais", "frete_valor")
     log(f"Preenchendo FRETE VALOR (seção): {frete_val2}")
     pyautogui.write(frete_val2, interval=0.12)
+    time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     frete_tipo = profile.get_value("informacoes_adicionais", "frete_tipo")
@@ -742,7 +746,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     for _ in range(7):
         pyautogui.press("tab")
-        time.sleep(0.4)
+        time.sleep(0.3)
     pyautogui.press("space")
     time.sleep(0.3)
     pyautogui.press("space")
@@ -820,7 +824,6 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.5)
-    time.sleep(0.5)
     pyautogui.hotkey("ctrl", "v")
     pyautogui.press("tab")
     time.sleep(0.5)
@@ -872,13 +875,13 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
         for _ in range(2):
             pyautogui.press("tab")
             time.sleep(0.1)
-        time.sleep(0.5)
+        time.sleep(0.3)
 
         # Copiar página e extrair CT-e
         pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.5)
+        time.sleep(0.7)
         pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.5)
+        time.sleep(0.8)
         conteudo = pyperclip.paste()
         linhas = conteudo.splitlines()
         numero_cte_local = ""
