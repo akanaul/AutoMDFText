@@ -971,6 +971,17 @@ def main() -> None:
         pyautogui.press("esc")
         time.sleep(0.5)
 
+        # Prompt para DT ANTES de buscar o campo
+        prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
+        log("Exibindo prompt de DT")
+        time.sleep(0.3)  # Pequeno delay para garantir estabilidade antes do prompt
+        numero_dt = pyautogui.prompt(text=prompt_text, title="DT")
+        if not numero_dt:
+            pyautogui.alert("Nenhum código DT informado. O script foi pausado.")
+            pyautogui.FAILSAFE = True
+            return
+        log(f"DT informado: {numero_dt}")
+
         # Detectar primeira tela (CT-e) como no legado
         log("Detectando tela CT-e (notas emitidas: ct-e)")
         conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
@@ -992,16 +1003,10 @@ def main() -> None:
         for _ in range(2):
             pyautogui.press("tab")
             time.sleep(1)
-        # Prompt para DT
-        prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
-        codigo = pyautogui.prompt(text=prompt_text, title="DT")
-        if not codigo:
-            pyautogui.alert("Nenhum código informado. O script foi pausado.")
-            pyautogui.FAILSAFE = True
-            return
         
-        # Escrever código DT e dar enter 2x
-        pyautogui.write(codigo.upper(), interval=0.1)
+        # Usar o DT armazenado previamente
+        log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
+        pyautogui.write(numero_dt.upper(), interval=0.1)
         time.sleep(0.3)
         pyautogui.press("enter")
         time.sleep(0.3)
@@ -1023,7 +1028,7 @@ def main() -> None:
         fill_mdfe(profile)
         fill_modal_rodo(profile)
         fill_additional_info(profile)
-        perform_averbacao(numero_cte, codigo)
+        perform_averbacao(numero_cte, numero_dt)
         
         pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
     except Exception as e:
