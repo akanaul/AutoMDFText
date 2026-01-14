@@ -113,7 +113,7 @@ def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate
     if last_error == 183:  # ERROR_ALREADY_EXISTS
         try:
             if on_duplicate == "warn":
-                pyautogui.alert("Já existe uma instância em execução. O processo será encerrado.")
+                focused_alert("Já existe uma instância em execução. O processo será encerrado.")
         except Exception:
             pass
         raise SystemExit(0)
@@ -149,6 +149,95 @@ def choose_profile(interactive_list: list[str], default: str) -> str:
     hide_console_window()
     
     return selected_profile
+
+
+def ensure_prompt_focus() -> None:
+    """Garante que os prompts do PyAutoGUI ganhem foco ao aparecer."""
+    if os.name != "nt":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        
+        # Permite que a próxima janela possa ganhar foco
+        user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
+        
+        # Obtém o ID do thread e processo atual
+        current_thread = kernel32.GetCurrentThreadId()
+        foreground_thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
+        
+        # Anexa o input do thread atual ao thread em foreground
+        if foreground_thread != current_thread:
+            user32.AttachThreadInput(foreground_thread, current_thread, True)
+            
+        # Força mudança de foco
+        user32.BringWindowToTop(user32.GetForegroundWindow())
+        user32.SetFocus(user32.GetForegroundWindow())
+        
+        # Desanexa os threads
+        if foreground_thread != current_thread:
+            user32.AttachThreadInput(foreground_thread, current_thread, False)
+            
+        time.sleep(0.15)
+    except Exception:
+        pass
+
+
+def focused_prompt(text: str = "", title: str = "", default: str = ""):
+    """Wrapper para pyautogui.prompt com foco garantido."""
+    ensure_prompt_focus()
+    time.sleep(0.3)
+    result = pyautogui.prompt(text=text, title=title, default=default)
+    # Força foco adicional após a criação da janela
+    try:
+        if os.name == "nt":
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if hwnd:
+                user32.SetForegroundWindow(hwnd)
+                user32.SetActiveWindow(hwnd)
+                user32.SetFocus(hwnd)
+    except Exception:
+        pass
+    return result
+
+
+def focused_alert(text: str = "", title: str = "", button: str = "OK"):
+    """Wrapper para pyautogui.alert com foco garantido."""
+    ensure_prompt_focus()
+    time.sleep(0.3)
+    result = pyautogui.alert(text=text, title=title, button=button)
+    # Força foco adicional após a criação da janela
+    try:
+        if os.name == "nt":
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if hwnd:
+                user32.SetForegroundWindow(hwnd)
+                user32.SetActiveWindow(hwnd)
+                user32.SetFocus(hwnd)
+    except Exception:
+        pass
+    return result
+
+
+def focused_confirm(text: str = "", title: str = "", buttons=None):
+    """Wrapper para pyautogui.confirm com foco garantido."""
+    ensure_prompt_focus()
+    time.sleep(0.3)
+    result = pyautogui.confirm(text=text, title=title, buttons=buttons)
+    # Força foco adicional após a criação da janela
+    try:
+        if os.name == "nt":
+            user32 = ctypes.windll.user32
+            hwnd = user32.GetForegroundWindow()
+            if hwnd:
+                user32.SetForegroundWindow(hwnd)
+                user32.SetActiveWindow(hwnd)
+                user32.SetFocus(hwnd)
+    except Exception:
+        pass
+    return result
 
 
 def ensure_caps_off() -> None:
@@ -221,7 +310,7 @@ def upload_latest_xml() -> None:
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
     if not list_of_files:
-        pyautogui.alert("A pasta Downloads está vazia!")
+        focused_alert("A pasta Downloads está vazia!")
         return
     latest_file = max(list_of_files, key=os.path.getctime)
     pyautogui.write(str(latest_file), interval=0.10)
@@ -452,20 +541,20 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     ncm_secondary = profile.get_value("mdfe", "ncm_secondary", "19059090")
     ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary", "20052000")
     
-    opcao = pyautogui.confirm(
+    opcao = focused_confirm(
         text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
         title='Escolha de NCM',
         buttons=[ncm_primary, ncm_secondary, ncm_tertiary, 'Outro código', 'Cancelar']
     )
 
     if opcao == 'Cancelar':
-        pyautogui.alert('Nenhum código NCM selecionado. O script foi pausado.')
+        focused_alert('Nenhum código NCM selecionado. O script foi pausado.')
         pyautogui.FAILSAFE = True
         raise SystemExit(1)
     elif opcao == 'Outro código':
-        codigo = pyautogui.prompt('Digite o código NCM:')
+        codigo = focused_prompt('Digite o código NCM:')
         if not codigo:
-            pyautogui.alert('Nenhum código NCM digitado. O script foi pausado.')
+            focused_alert('Nenhum código NCM digitado. O script foi pausado.')
             pyautogui.FAILSAFE = True
             raise SystemExit(1)
     else:
@@ -934,7 +1023,7 @@ def main() -> None:
 
         # Alerta ANTES de abrir navegador (herdado do legado)
         log("Exibindo alerta inicial")
-        pyautogui.alert(
+        focused_alert(
             'ANTES DE PROSSEGUIR:\n\n'
             '1. Mantenha 3 abas do Invoisys abertas e o site de averbação logado;\n'
             '2. Deixe o navegador como o primeiro app na barra do Windows;\n'
@@ -974,10 +1063,9 @@ def main() -> None:
         # Prompt para DT ANTES de buscar o campo
         prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
         log("Exibindo prompt de DT")
-        time.sleep(0.3)  # Pequeno delay para garantir estabilidade antes do prompt
-        numero_dt = pyautogui.prompt(text=prompt_text, title="DT")
+        numero_dt = focused_prompt(text=prompt_text, title="DT")
         if not numero_dt:
-            pyautogui.alert("Nenhum código DT informado. O script foi pausado.")
+            focused_alert("Nenhum código DT informado. O script foi pausado.")
             pyautogui.FAILSAFE = True
             return
         log(f"DT informado: {numero_dt}")
@@ -1014,7 +1102,7 @@ def main() -> None:
         time.sleep(0.5)
 
         # Alerta com instruções (do perfil)
-        pyautogui.alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
+        focused_alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
         time.sleep(1)
 
         # Desativar Caps Lock
@@ -1030,7 +1118,7 @@ def main() -> None:
         fill_additional_info(profile)
         perform_averbacao(numero_cte, numero_dt)
         
-        pyautogui.alert("Sucesso! Inclua a NF e os dados do motorista")
+        focused_alert("Sucesso! Inclua a NF e os dados do motorista")
     except Exception as e:
         log(f"ERRO FATAL: {e}")
         raise
