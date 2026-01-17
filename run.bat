@@ -60,7 +60,7 @@ REM Guard before launching, ensure no existing automation is running
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p = Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'modular_mdfe\.py' }; if ($p) { Write-Host 'Automação já em execução. Retornando ao menu...'; exit 1 } else { exit 0 } } catch { exit 0 }"
 IF ERRORLEVEL 1 goto prompt
 %PYTHON% modular_mdfe.py
-goto prompt
+goto modular
 
 :editor
 echo Opening the profile editor.

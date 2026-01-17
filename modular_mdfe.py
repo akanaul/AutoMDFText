@@ -2,6 +2,7 @@ import argparse
 import ctypes
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -98,6 +99,53 @@ def hide_console_window() -> None:
     ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
 
 
+def restore_console_popup() -> None:
+    """Restaura o terminal, trazendo-o ao topo como um popup curto."""
+    if os.name != "nt":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        hwnd = kernel32.GetConsoleWindow()
+        if not hwnd:
+            return
+
+        SW_SHOW = 5
+        HWND_TOPMOST = -1
+        HWND_NOTOPMOST = -2
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_SHOWWINDOW = 0x0040
+
+        # Mostrar e trazer para frente
+        user32.ShowWindow(hwnd, SW_SHOW)
+        user32.SetForegroundWindow(hwnd)
+        user32.SetActiveWindow(hwnd)
+        user32.BringWindowToTop(hwnd)
+
+        # Tornar topmost brevemente para comportamento de popup
+        user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        time.sleep(0.15)
+        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+    except Exception:
+        pass
+
+
+def play_low_beep() -> None:
+    """Emite um beep de baixa frequência ao final da automação."""
+    try:
+        if os.name == "nt":
+            # Frequência baixa (~400Hz), duração 180ms
+            import winsound
+            winsound.Beep(400, 180)
+        else:
+            # Fallback para bell character em outros sistemas
+            print("\a", end="", flush=True)
+    except Exception:
+        pass
+
+
 def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate: str = "warn") -> None:
     """Impede execução duplicada usando um Mutex nomeado do Windows.
     Se já existir outra instância:
@@ -123,27 +171,115 @@ def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate
         _SINGLETON_MUTEX_HANDLE = handle
 
 
-def choose_profile(interactive_list: list[str], default: str) -> str:
+def choose_profile(interactive_list: list[str]) -> str:
     log("Iniciando seleção de perfil")
     if not interactive_list:
-        log("Nenhum script disponível; usando o template padrão.")
-        return default
-    print("Selecione o script a utilizar:")
-    for idx, name in enumerate(interactive_list, start=1):
-        print(f"  {idx}. {name}")
-    print("Enter para usar o template padrão (ou digite o número)")
-    choice = input("Opção: ").strip()
+        log("Nenhum script disponível; diretório scripts/ está vazio.")
+        try:
+            focused_alert(
+                "Nenhum script encontrado em scripts/.\n\n"
+                "Adicione um arquivo .txt de configuração e tente novamente.",
+                title="Nenhum script encontrado"
+            )
+        except Exception:
+            pass
+        raise SystemExit(1)
     
-    selected_profile = default
-    if choice:
-        if choice.isdigit():
-            index = int(choice) - 1
-            if 0 <= index < len(interactive_list):
-                selected_profile = interactive_list[index]
-        elif choice in interactive_list:
-            selected_profile = choice
-        else:
-            log("Opção inválida; usando o template padrão.")
+    # Cores ANSI para destacar o menu
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+    
+    selected_profile = None
+    max_attempts = 100  # Proteção contra loops infinitos por erro de lógica
+    attempts = 0
+    
+    # Loop até que uma seleção válida seja feita
+    while not selected_profile and attempts < max_attempts:
+        attempts += 1
+        
+        try:
+            # Revalidar lista a cada iteração (caso arquivos sejam adicionados/removidos)
+            current_list = list_profiles()
+            if not current_list:
+                log("Lista de scripts ficou vazia durante seleção; usando template padrão.")
+                return default
+            
+            # Atualizar lista se mudou
+            if current_list != interactive_list:
+                interactive_list = current_list
+                log(f"Lista de scripts atualizada: {len(interactive_list)} scripts disponíveis.")
+            
+            # Menu destacado com cores e separadores
+            print(f"\n{CYAN}{'=' * 60}{RESET}")
+            print(f"{BOLD}{GREEN}  SELEÇÃO DE SCRIPT - AUTOMAÇÃO MDF-e{RESET}")
+            print(f"{CYAN}{'=' * 60}{RESET}\n")
+            
+            for idx, name in enumerate(interactive_list, start=1):
+                print(f"{YELLOW}  [{idx}]{RESET} {name}")
+            
+            print(f"\n{CYAN}{'─' * 60}{RESET}")
+            print(f"{BOLD}Digite o número do script desejado:{RESET}")
+            print(f"{CYAN}{'─' * 60}{RESET}\n")
+            
+            choice = input(f"{BOLD}Opção: {RESET}").strip()
+            
+            # Validar entrada
+            if not choice:
+                print(f"\n{RED}✗ Erro: Você deve selecionar um script!{RESET}")
+                log("Entrada vazia; solicitando nova seleção.")
+                time.sleep(1.5)
+                continue
+            
+            # Tentar converter para número
+            if choice.isdigit():
+                try:
+                    index = int(choice) - 1
+                    if 0 <= index < len(interactive_list):
+                        selected_profile = interactive_list[index]
+                        log(f"Script selecionado por índice {choice}: {selected_profile}")
+                    else:
+                        print(f"\n{RED}✗ Erro: Número inválido! Escolha entre 1 e {len(interactive_list)}.{RESET}")
+                        log(f"Opção fora do intervalo: {choice}")
+                        time.sleep(1.5)
+                except (ValueError, IndexError) as e:
+                    print(f"\n{RED}✗ Erro ao processar número: {str(e)}{RESET}")
+                    log(f"Erro ao processar índice {choice}: {e}")
+                    time.sleep(1.5)
+            # Aceitar nome exato do arquivo (case-insensitive para maior flexibilidade)
+            elif choice.lower() in [s.lower() for s in interactive_list]:
+                # Encontrar o nome com case correto
+                for script in interactive_list:
+                    if script.lower() == choice.lower():
+                        selected_profile = script
+                        log(f"Script selecionado por nome: {selected_profile}")
+                        break
+            else:
+                print(f"\n{RED}✗ Erro: Opção inválida! Digite um número válido.{RESET}")
+                log(f"Opção inválida: {choice}")
+                time.sleep(1.5)
+                
+        except KeyboardInterrupt:
+            print(f"\n\n{RED}✗ Seleção cancelada pelo usuário.{RESET}")
+            log("Seleção interrompida por Ctrl+C")
+            raise SystemExit(0)
+        except Exception as e:
+            print(f"\n{RED}✗ Erro inesperado: {str(e)}{RESET}")
+            log(f"ERRO durante seleção de perfil: {e}")
+            time.sleep(1.5)
+            # Continuar o loop para tentar novamente
+            continue
+    
+    # Verificação de segurança
+    if not selected_profile:
+        log(f"Número máximo de tentativas atingido ({max_attempts}); usando template padrão.")
+        return default
+    
+    print(f"\n{GREEN}✓ Script selecionado: {BOLD}{selected_profile}{RESET}\n")
+    print(f"{CYAN}{'=' * 60}{RESET}\n")
     
     # Fechar/ocultar o terminal após seleção (com fallback em caso de WM_CLOSE falhar)
     hide_console_window()
@@ -183,61 +319,126 @@ def ensure_prompt_focus() -> None:
         pass
 
 
+def make_window_topmost(hwnd) -> None:
+    """Define uma janela como topmost (sempre no topo)."""
+    if os.name != "nt" or not hwnd:
+        return
+    try:
+        user32 = ctypes.windll.user32
+        # Constantes do Windows
+        HWND_TOPMOST = -1
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_SHOWWINDOW = 0x0040
+        
+        # Define a janela como topmost
+        user32.SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
+        )
+        # Garante que está em primeiro plano
+        user32.SetForegroundWindow(hwnd)
+        user32.SetActiveWindow(hwnd)
+        user32.BringWindowToTop(hwnd)
+    except Exception:
+        pass
+
+
+def find_and_focus_pymsgbox() -> None:
+    """Encontra e foca a janela do PyMsgBox (usado por pyautogui)."""
+    if os.name != "nt":
+        return
+    try:
+        user32 = ctypes.windll.user32
+        
+        # Callback para enumerar janelas
+        def enum_callback(hwnd, lParam):
+            if user32.IsWindowVisible(hwnd):
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buffer = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buffer, length + 1)
+                    # PyAutoGUI usa PyMsgBox que cria janelas com classe específica
+                    class_buffer = ctypes.create_unicode_buffer(256)
+                    user32.GetClassNameW(hwnd, class_buffer, 256)
+                    # Procura por janelas do tipo dialog ou PyMsgBox
+                    if "#32770" in class_buffer.value or "tk" in class_buffer.value.lower():
+                        make_window_topmost(hwnd)
+            return True
+        
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        user32.EnumWindows(EnumWindowsProc(enum_callback), 0)
+    except Exception:
+        pass
+
+
 def focused_prompt(text: str = "", title: str = "", default: str = ""):
     """Wrapper para pyautogui.prompt com foco garantido."""
     ensure_prompt_focus()
-    time.sleep(0.3)
-    result = pyautogui.prompt(text=text, title=title, default=default)
-    # Força foco adicional após a criação da janela
+    time.sleep(0.1)
+    
+    # Criar um timer para forçar topmost logo após a janela ser criada
+    def force_topmost():
+        time.sleep(0.15)
+        find_and_focus_pymsgbox()
+    
+    timer = threading.Timer(0.05, force_topmost)
+    timer.daemon = True
+    timer.start()
+    
     try:
-        if os.name == "nt":
-            user32 = ctypes.windll.user32
-            hwnd = user32.GetForegroundWindow()
-            if hwnd:
-                user32.SetForegroundWindow(hwnd)
-                user32.SetActiveWindow(hwnd)
-                user32.SetFocus(hwnd)
-    except Exception:
-        pass
+        result = pyautogui.prompt(text=text, title=title, default=default)
+    finally:
+        timer.cancel()
+    
     return result
 
 
 def focused_alert(text: str = "", title: str = "", button: str = "OK"):
     """Wrapper para pyautogui.alert com foco garantido."""
     ensure_prompt_focus()
-    time.sleep(0.3)
-    result = pyautogui.alert(text=text, title=title, button=button)
-    # Força foco adicional após a criação da janela
+    time.sleep(0.1)
+    
+    # Criar um timer para forçar topmost logo após a janela ser criada
+    def force_topmost():
+        time.sleep(0.15)
+        find_and_focus_pymsgbox()
+    
+    timer = threading.Timer(0.05, force_topmost)
+    timer.daemon = True
+    timer.start()
+    
     try:
-        if os.name == "nt":
-            user32 = ctypes.windll.user32
-            hwnd = user32.GetForegroundWindow()
-            if hwnd:
-                user32.SetForegroundWindow(hwnd)
-                user32.SetActiveWindow(hwnd)
-                user32.SetFocus(hwnd)
-    except Exception:
-        pass
+        result = pyautogui.alert(text=text, title=title, button=button)
+    finally:
+        timer.cancel()
+    
     return result
 
 
 def focused_confirm(text: str = "", title: str = "", buttons=None):
     """Wrapper para pyautogui.confirm com foco garantido."""
     ensure_prompt_focus()
-    time.sleep(0.3)
-    result = pyautogui.confirm(text=text, title=title, buttons=buttons)
-    # Força foco adicional após a criação da janela
+    time.sleep(0.1)
+    
+    # Criar um timer para forçar topmost logo após a janela ser criada
+    def force_topmost():
+        time.sleep(0.15)
+        find_and_focus_pymsgbox()
+    
+    timer = threading.Timer(0.05, force_topmost)
+    timer.daemon = True
+    timer.start()
+    
     try:
-        if os.name == "nt":
-            user32 = ctypes.windll.user32
-            hwnd = user32.GetForegroundWindow()
-            if hwnd:
-                user32.SetForegroundWindow(hwnd)
-                user32.SetActiveWindow(hwnd)
-                user32.SetFocus(hwnd)
-    except Exception:
-        pass
+        result = pyautogui.confirm(text=text, title=title, buttons=buttons)
+    finally:
+        timer.cancel()
+    
     return result
+    return result_container[0]
 
 
 def ensure_caps_off() -> None:
@@ -408,8 +609,9 @@ def navigate_to_mdfe() -> None:
     time.sleep(1.2)
 
 
-def fill_mdfe(profile: ConfigProfile) -> None:
-    """Preenche dados do MDF-e - cópia exata do script legado"""
+def fill_mdfe(profile: ConfigProfile) -> str:
+    """Preenche dados do MDF-e - cópia exata do script legado
+    Retorna o código NCM selecionado."""
     time.sleep(1)
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
@@ -537,9 +739,17 @@ def fill_mdfe(profile: ConfigProfile) -> None:
         pyautogui.press("tab")
         time.sleep(0.15)
     
-    ncm_primary = profile.get_value("mdfe", "ncm_primary", "19041000")
-    ncm_secondary = profile.get_value("mdfe", "ncm_secondary", "19059090")
-    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary", "20052000")
+    ncm_primary = profile.get_value("mdfe", "ncm_primary")
+    ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
+    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary")
+    if not (ncm_primary and ncm_secondary and ncm_tertiary):
+        log("Perfil sem códigos NCM obrigatórios (mdfe.ncm_primary/secondary/tertiary)")
+        focused_alert(
+            "O perfil está faltando códigos NCM obrigatórios:\n"
+            "mdfe.ncm_primary, mdfe.ncm_secondary, mdfe.ncm_tertiary",
+            title="Perfil inválido"
+        )
+        raise SystemExit(1)
     
     opcao = focused_confirm(
         text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
@@ -560,6 +770,7 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     else:
         codigo = opcao
     
+    log(f"Código NCM selecionado: {codigo}")
     pyautogui.write(codigo.upper(), interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -585,6 +796,8 @@ def fill_mdfe(profile: ConfigProfile) -> None:
     log(f"Preenchendo CEP DESTINO: {cep_dest}")
     pyautogui.write(cep_dest, interval=0.1)
     time.sleep(1.25)
+    
+    return codigo
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
@@ -822,7 +1035,14 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(5):
         pyautogui.press("tab")
         time.sleep(0.2)
-    numero_parcelas = profile.get_value("informacoes_adicionais", "numero_parcelas", "1")
+    numero_parcelas = profile.get_value("informacoes_adicionais", "numero_parcelas")
+    if not numero_parcelas:
+        log("Perfil sem 'informacoes_adicionais.numero_parcelas' obrigatório")
+        focused_alert(
+            "O perfil está faltando a chave obrigatória: informacoes_adicionais.numero_parcelas",
+            title="Perfil inválido"
+        )
+        raise SystemExit(1)
     log(f"Preenchendo NUMERO PARCELAS: {numero_parcelas}")
     pyautogui.write(numero_parcelas, interval=0.10)
     time.sleep(0.15)
@@ -922,7 +1142,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
     # Preencher DT/CT-e/NF na área de CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.5)
-    pyautogui.write("CONTRIBUINTE", interval=0.1)
+    pyautogui.write("CONTRIBUINTE", interval=0.15)
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.5)
@@ -1011,27 +1231,23 @@ def main() -> None:
 
         selected = args.profile
         if not selected:
-            selected = choose_profile(list_profiles(), DEFAULT_PROFILE)
+            selected = choose_profile(list_profiles())
         log(f"Perfil selecionado: {selected}")
         profile_path = CONFIG_DIR / selected
         if not profile_path.exists():
-            log(f"Perfil {profile_path} não encontrado, usando template")
-            profile_path = CONFIG_DIR / DEFAULT_PROFILE
+            log(f"Perfil {profile_path} não encontrado.")
+            try:
+                focused_alert(
+                    f"O arquivo de perfil não foi encontrado:\n{profile_path}\n\nCorrija o nome do script e tente novamente.",
+                    title="Perfil ausente"
+                )
+            except Exception:
+                pass
+            raise SystemExit(1)
 
         profile = ConfigProfile(profile_path)
         log(f"Perfil carregado de: {profile_path}")
 
-        # Alerta ANTES de abrir navegador (herdado do legado)
-        log("Exibindo alerta inicial")
-        focused_alert(
-            'ANTES DE PROSSEGUIR:\n\n'
-            '1. Mantenha 3 abas do Invoisys abertas e o site de averbação logado;\n'
-            '2. Deixe o navegador como o primeiro app na barra do Windows;\n'
-            '3. Mantenha apenas uma janela do navegador ativa.\n\n'
-            'OBS: Para interromper o código, mova o mouse repetidamente para o canto superior direito da tela.'
-        )
-        time.sleep(1)
-        
         # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
         log("Focando navegador (evitando minimizar)")
         focus_browser_if_needed()
@@ -1061,7 +1277,14 @@ def main() -> None:
         time.sleep(0.5)
 
         # Prompt para DT ANTES de buscar o campo
-        prompt_text = profile.get_value("general", "dt_prompt_text", "Digite o número do DT:")
+        prompt_text = profile.get_value("general", "dt_prompt_text")
+        if not prompt_text:
+            log("Perfil sem 'general.dt_prompt_text' obrigatório")
+            focused_alert(
+                "O perfil está faltando a chave obrigatória: general.dt_prompt_text",
+                title="Perfil inválido"
+            )
+            raise SystemExit(1)
         log("Exibindo prompt de DT")
         numero_dt = focused_prompt(text=prompt_text, title="DT")
         if not numero_dt:
@@ -1069,17 +1292,6 @@ def main() -> None:
             pyautogui.FAILSAFE = True
             return
         log(f"DT informado: {numero_dt}")
-
-        # Detectar primeira tela (CT-e) como no legado
-        log("Detectando tela CT-e (notas emitidas: ct-e)")
-        conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
-        log("Página CT-e detectada. Extraindo CT-e do conteúdo capturado...")
-        numero_cte = extract_cte_from_content(conteudo_cte_pagina)
-        if numero_cte:
-            log(f"CT-e extraído com sucesso no início: {numero_cte}")
-            pyperclip.copy(numero_cte)
-        else:
-            log("Aviso: Não foi possível extrair CT-e do conteúdo inicial. Tentaremos novamente ao final.")
 
         # Posicionar em "serie final" e Tab 2x
         log("Posicionando em 'serie final' e tabulando")
@@ -1101,10 +1313,42 @@ def main() -> None:
         pyautogui.press("enter")
         time.sleep(0.5)
 
-        # Alerta com instruções (do perfil)
-        focused_alert(profile.get_value("general", "alert_intro", "Antes de prosseguir:\n\n1. Baixe o arquivo XML;\n2. Mantenha 3 abas do Invoisys abertas no começo do navegador;\n3. Mantenha o site de averbação logado.\n\nOBS: Para interromper o processo, deslize o mouse repetidamente em direção ao canto superior direito da tela"))
-        time.sleep(1)
+        # Detectar primeira tela (CT-e) APÓS inserir o DT
+        log("Detectando tela CT-e (notas emitidas: ct-e)")
+        log("Aguardando 4 segundos para o site carregar antes de copiar...")
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        time.sleep(3)
+        numero_cte = ""
+        try:
+            conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
+            log("Página CT-e detectada. Extraindo CT-e do conteúdo capturado...")
+            numero_cte = extract_cte_from_content(conteudo_cte_pagina)
+            if numero_cte:
+                log(f"CT-e extraído com sucesso: {numero_cte}")
+                pyperclip.copy(numero_cte)
+            else:
+                log("Aviso: Não foi possível extrair CT-e do conteúdo.")
+        except SystemExit:
+            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado. Continuando sem CT-e capturado.")
+            numero_cte = ""
 
+        # Alerta solicitando download do XML
+        log("Exibindo alerta para download do XML")
+        xml_alert = profile.get_value("general", "xml_download_alert")
+        if not xml_alert:
+            # Compatibilidade com padrão anterior: usar alert_intro se existir
+            xml_alert = profile.get_value("general", "alert_intro")
+        if not xml_alert:
+            # Hardcode apenas se não houver chave no perfil (não padrão antigo)
+            xml_alert = (
+                'BAIXE O ARQUIVO XML:\n\n'
+                '1. Faça o download do arquivo XML da DT buscada;\n'
+                '2. Aguarde o download ser concluído;\n'
+                '3. Clique em OK para continuar a automação.\n\n'
+                'OBS: Para interromper o processo, mova o mouse repetidamente para o canto superior direito da tela.'
+            )
+        focused_alert(xml_alert)
         # Desativar Caps Lock
         ensure_caps_off()
         
@@ -1113,14 +1357,49 @@ def main() -> None:
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
         
         # Preencher formulário
-        fill_mdfe(profile)
+        codigo_ncm = fill_mdfe(profile)
         fill_modal_rodo(profile)
         fill_additional_info(profile)
         perform_averbacao(numero_cte, numero_dt)
         
-        focused_alert("Sucesso! Inclua a NF e os dados do motorista")
+        # Ao finalizar com sucesso, restaurar o terminal como popup e emitir beep baixo
+        restore_console_popup()
+        play_low_beep()
+        
+        # Exibir resumo no terminal
+        GREEN = "\033[92m"
+        CYAN = "\033[96m"
+        YELLOW = "\033[93m"
+        BOLD = "\033[1m"
+        RESET = "\033[0m"
+        
+        print(f"\n{CYAN}{'=' * 60}{RESET}")
+        print(f"{BOLD}{GREEN}  AUTOMAÇÃO CONCLUÍDA COM SUCESSO!{RESET}")
+        print(f"{CYAN}{'=' * 60}{RESET}\n")
+        print(f"{BOLD}Resumo das Informações:{RESET}\n")
+        print(f"  {YELLOW}DT:{RESET}      {numero_dt}")
+        print(f"  {YELLOW}CT-e:{RESET}    {numero_cte if numero_cte else 'Não capturado'}")
+        print(f"  {YELLOW}NCM:{RESET}     {codigo_ncm}")
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{BOLD}Próximos passos:{RESET}")
+        print(f"  • Inclua a NF")
+        print(f"  • Preencha os dados do motorista")
+        print(f"\n{CYAN}{'=' * 60}{RESET}\n")
+        log("Automação finalizada com sucesso")
     except Exception as e:
-        log(f"ERRO FATAL: {e}")
+        import traceback
+        error_msg = f"ERRO FATAL: {e}\n{traceback.format_exc()}"
+        log(error_msg)
+        # Exibir alerta do erro
+        try:
+            focused_alert(
+                f"Erro durante a automação:\n\n{str(e)}\n\nVer log para detalhes completos.",
+                title="Erro na automação"
+            )
+        except Exception:
+            pass
+        # Restaurar terminal para que o usuário possa ver o erro
+        restore_console_popup()
         raise
 
 
