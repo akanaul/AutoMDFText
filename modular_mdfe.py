@@ -596,7 +596,7 @@ def navigate_to_mdfe() -> None:
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(0.7)
     
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
@@ -606,7 +606,7 @@ def navigate_to_mdfe() -> None:
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(1.2)
+    time.sleep(0.7)
 
 
 def fill_mdfe(profile: ConfigProfile) -> str:
@@ -627,7 +627,6 @@ def fill_mdfe(profile: ConfigProfile) -> str:
     time.sleep(0.5)
     pyautogui.press("enter")
     time.sleep(0.3)
-    time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("space")
@@ -655,7 +654,7 @@ def fill_mdfe(profile: ConfigProfile) -> str:
     pyautogui.press("enter")
     time.sleep(0.3)
     pyautogui.press("tab")
-    time.sleep(0.4)
+    time.sleep(0.3)
     pyautogui.press("space")
     time.sleep(0.3)
     uf_desc = profile.get_value("mdfe", "uf_descarga")
@@ -694,7 +693,7 @@ def fill_mdfe(profile: ConfigProfile) -> str:
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(2.5)
+    time.sleep(1.5)
 
     # UNIDADE DE MEDIDA
     for _ in range(5):
@@ -812,11 +811,11 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.25)
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.25)
 
     # RNTRC
     pyautogui.hotkey("ctrl", "f")
@@ -856,7 +855,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
         pyautogui.press("tab")
         time.sleep(0.15)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.25)
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
@@ -1056,10 +1055,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     for _ in range(7):
         pyautogui.press("tab")
         time.sleep(0.3)
-    pyautogui.press("space")
-    time.sleep(0.3)
-    pyautogui.press("space")
-    time.sleep(0.3)
+    for _ in range(2):
+        pyautogui.press("space")
+        time.sleep(0.3)
     pyautogui.press("tab")
     time.sleep(0.3)
     pyautogui.press("enter")
@@ -1073,7 +1071,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(1.5)
+    time.sleep(1.0)
 
 
 def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
@@ -1085,7 +1083,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
     pyautogui.hotkey("ctrl", "shift", "a")
     time.sleep(0.5)
     pyautogui.write("ATM", interval=0.1)
-    for _ in range(2):
+    for _ in range(3):
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("enter")
@@ -1093,13 +1091,13 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
 
     for search in ("OK", "XML", "ENVIAR"):
         pyautogui.hotkey("ctrl", "f")
-        time.sleep(0.5)
+        time.sleep(0.4)
         pyautogui.write(search, interval=0.1)
-        time.sleep(0.5)
+        time.sleep(0.4)
         pyautogui.press("esc")
         time.sleep(0.2)
         pyautogui.press("enter")
-        time.sleep(0.5)
+        time.sleep(0.3)
 
     upload_latest_xml()
     time.sleep(2)
@@ -1120,34 +1118,34 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
 
     time.sleep(0.5)
     pyautogui.hotkey("alt", "tab")
-    time.sleep(1)
+    time.sleep(0.7)
 
     # Preencher detalhes na outra aba
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.5)
+    time.sleep(0.4)
     pyautogui.write("DETALHES", interval=0.1)
     time.sleep(0.3)
     pyautogui.press("esc")
     pyautogui.press("enter")
-    time.sleep(0.5)
+    time.sleep(0.4)
     for _ in range(2):
         pyautogui.press("tab")
-        time.sleep(0.5)
+        time.sleep(0.3)
     pyautogui.hotkey("ctrl", "v")
     pyautogui.press("tab")
-    time.sleep(0.5)
+    time.sleep(0.4)
     pyautogui.press("enter")
-    time.sleep(1)
+    time.sleep(0.7)
 
     # Preencher DT/CT-e/NF na área de CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.5)
+    time.sleep(0.4)
     pyautogui.write("CONTRIBUINTE", interval=0.15)
     time.sleep(0.3)
     pyautogui.press("esc")
-    time.sleep(0.5)
+    time.sleep(0.4)
     pyautogui.press("tab")
-    time.sleep(0.5)
+    time.sleep(0.4)
 
     # DT sempre vem do prompt (numero_dt) capturado no início
     pyautogui.write("DT: ", interval=0.1)
@@ -1297,12 +1295,11 @@ def main() -> None:
         log("Posicionando em 'serie final' e tabulando")
         pyautogui.hotkey("ctrl", "f")
         time.sleep(2)
-        pyautogui.write("serie final", interval=0.12)
+        pyautogui.write("DO DT", interval=0.12)
         pyautogui.press("esc")
         time.sleep(0.5)
-        for _ in range(2):
-            pyautogui.press("tab")
-            time.sleep(1)
+        pyautogui.press("tab")
+        time.sleep(0.7)
         
         # Usar o DT armazenado previamente
         log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
