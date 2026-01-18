@@ -508,13 +508,14 @@ def extract_cte_from_content(conteudo: str) -> str:
 
 
 def upload_latest_xml() -> None:
+    time.sleep(1)
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
     if not list_of_files:
         focused_alert("A pasta Downloads está vazia!")
         return
     latest_file = max(list_of_files, key=os.path.getctime)
-    pyautogui.write(str(latest_file), interval=0.10)
+    pyautogui.write(str(latest_file), interval=0.12)
     time.sleep(0.3)
     pyautogui.press("enter")
 
@@ -686,7 +687,7 @@ def fill_mdfe(profile: ConfigProfile) -> str:
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("space")
-    time.sleep(2)
+    time.sleep(1.5)
     upload_latest_xml()
     time.sleep(0.5)
     for _ in range(2):
@@ -1089,6 +1090,11 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
+    ##Pequeno hotfix para GAP relacionado a envio de XMLs, verificar alternativas
+    for _ in range(2):
+        pyautogui.press("tab")
+        time.sleep(0.1)
+
     for search in ("OK", "XML", "ENVIAR"):
         pyautogui.hotkey("ctrl", "f")
         time.sleep(0.4)
@@ -1100,7 +1106,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
         time.sleep(0.3)
 
     upload_latest_xml()
-    time.sleep(2)
+    time.sleep(2.5)
 
     # Extrair número de averbação e copiar apenas os dígitos
     pyautogui.hotkey("ctrl", "a")
