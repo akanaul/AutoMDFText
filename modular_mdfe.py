@@ -610,9 +610,47 @@ def navigate_to_mdfe() -> None:
     time.sleep(0.7)
 
 
-def fill_mdfe(profile: ConfigProfile) -> str:
-    """Preenche dados do MDF-e - cópia exata do script legado
+def select_ncm(profile: ConfigProfile) -> str:
+    """Exibe prompt para seleção de NCM no início da automação.
     Retorna o código NCM selecionado."""
+    ncm_primary = profile.get_value("mdfe", "ncm_primary")
+    ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
+    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary")
+    if not (ncm_primary and ncm_secondary and ncm_tertiary):
+        log("Perfil sem códigos NCM obrigatórios (mdfe.ncm_primary/secondary/tertiary)")
+        focused_alert(
+            "O perfil está faltando códigos NCM obrigatórios:\n"
+            "mdfe.ncm_primary, mdfe.ncm_secondary, mdfe.ncm_tertiary",
+            title="Perfil inválido"
+        )
+        raise SystemExit(1)
+    
+    opcao = focused_confirm(
+        text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
+        title='Escolha de NCM',
+        buttons=[ncm_primary, ncm_secondary, ncm_tertiary, 'Outro código', 'Cancelar']
+    )
+
+    if opcao == 'Cancelar':
+        focused_alert('Nenhum código NCM selecionado. O script foi pausado.')
+        pyautogui.FAILSAFE = True
+        raise SystemExit(1)
+    elif opcao == 'Outro código':
+        codigo = focused_prompt('Digite o código NCM:')
+        if not codigo:
+            focused_alert('Nenhum código NCM digitado. O script foi pausado.')
+            pyautogui.FAILSAFE = True
+            raise SystemExit(1)
+    else:
+        codigo = opcao
+    
+    log(f"Código NCM selecionado: {codigo}")
+    return codigo
+
+
+def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
+    """Preenche dados do MDF-e - cópia exata do script legado
+    Recebe o código NCM já selecionado como parâmetro."""
     time.sleep(1)
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
@@ -734,44 +772,13 @@ def fill_mdfe(profile: ConfigProfile) -> str:
     pyautogui.write(descricao, interval=0.1)
     time.sleep(0.2)
 
-    # CÓDIGO NCM
+    # CÓDIGO NCM (já selecionado e passado como parâmetro)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.15)
     
-    ncm_primary = profile.get_value("mdfe", "ncm_primary")
-    ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
-    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary")
-    if not (ncm_primary and ncm_secondary and ncm_tertiary):
-        log("Perfil sem códigos NCM obrigatórios (mdfe.ncm_primary/secondary/tertiary)")
-        focused_alert(
-            "O perfil está faltando códigos NCM obrigatórios:\n"
-            "mdfe.ncm_primary, mdfe.ncm_secondary, mdfe.ncm_tertiary",
-            title="Perfil inválido"
-        )
-        raise SystemExit(1)
-    
-    opcao = focused_confirm(
-        text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
-        title='Escolha de NCM',
-        buttons=[ncm_primary, ncm_secondary, ncm_tertiary, 'Outro código', 'Cancelar']
-    )
-
-    if opcao == 'Cancelar':
-        focused_alert('Nenhum código NCM selecionado. O script foi pausado.')
-        pyautogui.FAILSAFE = True
-        raise SystemExit(1)
-    elif opcao == 'Outro código':
-        codigo = focused_prompt('Digite o código NCM:')
-        if not codigo:
-            focused_alert('Nenhum código NCM digitado. O script foi pausado.')
-            pyautogui.FAILSAFE = True
-            raise SystemExit(1)
-    else:
-        codigo = opcao
-    
-    log(f"Código NCM selecionado: {codigo}")
-    pyautogui.write(codigo.upper(), interval=0.1)
+    log(f"Inserindo código NCM: {codigo_ncm}")
+    pyautogui.write(codigo_ncm.upper(), interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -796,8 +803,6 @@ def fill_mdfe(profile: ConfigProfile) -> str:
     log(f"Preenchendo CEP DESTINO: {cep_dest}")
     pyautogui.write(cep_dest, interval=0.1)
     time.sleep(1.25)
-    
-    return codigo
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
@@ -1316,7 +1321,13 @@ def main() -> None:
         pyautogui.press("enter")
         time.sleep(0.5)
 
-        # Detectar primeira tela (CT-e) APÓS inserir o DT
+        # SELEÇÃO DE NCM (APÓS DT E ANTES DE CTE) - NOVO FLUXO
+        log("Exibindo prompt para seleção de NCM")
+        codigo_ncm = select_ncm(profile)
+        log(f"NCM selecionado e armazenado: {codigo_ncm}")
+        time.sleep(0.5)
+
+        # Detectar primeira tela (CT-e) APÓS inserir o DT e NCM
         log("Detectando tela CT-e (notas emitidas: ct-e)")
         log("Aguardando 4 segundos para o site carregar antes de copiar...")
         pyautogui.press("tab")
@@ -1359,8 +1370,8 @@ def main() -> None:
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
         
-        # Preencher formulário
-        codigo_ncm = fill_mdfe(profile)
+        # Preencher formulário (passando codigo_ncm já selecionado)
+        fill_mdfe(profile, codigo_ncm)
         fill_modal_rodo(profile)
         fill_additional_info(profile)
         perform_averbacao(numero_cte, numero_dt)
