@@ -1080,7 +1080,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(1.0)
 
 
-def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
+def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str = "") -> None:
     """Executa a averbação e preenche DT/CT-e no final.
     - Usa CT-e capturado no início quando disponível, sem voltar à primeira página
     - Em fallback, captura CT-e na INVOISYS sem atrelar ou sobrescrever o DT
@@ -1221,8 +1221,11 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "") -> None:
             log("Não foi possível localizar o número do CT-e (fallback); deixar em branco.")
         time.sleep(0.5)
 
-    # Finalizar com rótulo NF
-    pyautogui.write(" NF: ", interval=0.1)
+    # Finalizar com rótulo NF sempre; deixa vazio se não informado
+    if nf_concat:
+        pyautogui.write(f" NF: {nf_concat}", interval=0.1)
+    else:
+        pyautogui.write(" NF: ", interval=0.1)
     time.sleep(0.5)
 
 
@@ -1327,6 +1330,21 @@ def main() -> None:
         log(f"NCM selecionado e armazenado: {codigo_ncm}")
         time.sleep(0.5)
 
+        # PROMPTS PARA NFs (NF1/NF2) E CONCATENAÇÃO (opcionais)
+        nf1 = focused_prompt(text="Informe a NF1 (opcional):", title="NF1") or ""
+        nf2 = focused_prompt(text="Informe a NF2 (opcional):", title="NF2") or ""
+        # Concatenar apenas se ambas informadas; caso contrário usar a que foi preenchida
+        if nf1 and nf2:
+            nf_concat = f"{nf1}/{nf2}"
+        elif nf1:
+            nf_concat = nf1
+        elif nf2:
+            nf_concat = nf2
+        else:
+            nf_concat = ""
+        log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
+        time.sleep(0.3)
+
         # Detectar primeira tela (CT-e) APÓS inserir o DT e NCM
         log("Detectando tela CT-e (notas emitidas: ct-e)")
         log("Aguardando 4 segundos para o site carregar antes de copiar...")
@@ -1374,7 +1392,7 @@ def main() -> None:
         fill_mdfe(profile, codigo_ncm)
         fill_modal_rodo(profile)
         fill_additional_info(profile)
-        perform_averbacao(numero_cte, numero_dt)
+        perform_averbacao(numero_cte, numero_dt, nf_concat)
         
         # Ao finalizar com sucesso, restaurar o terminal como popup e emitir beep baixo
         restore_console_popup()
@@ -1394,6 +1412,7 @@ def main() -> None:
         print(f"  {YELLOW}DT:{RESET}      {numero_dt}")
         print(f"  {YELLOW}CT-e:{RESET}    {numero_cte if numero_cte else 'Não capturado'}")
         print(f"  {YELLOW}NCM:{RESET}     {codigo_ncm}")
+        print(f"  {YELLOW}NF:{RESET}      {nf_concat if nf_concat else 'Não informado'}")
         print(f"\n{CYAN}{'─' * 60}{RESET}")
         print(f"{BOLD}Próximos passos:{RESET}")
         print(f"  • Inclua a NF")
