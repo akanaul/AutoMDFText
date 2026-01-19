@@ -347,7 +347,7 @@ def make_window_topmost(hwnd) -> None:
 
 
 def find_and_focus_pymsgbox() -> None:
-    """Encontra e foca a janela do PyMsgBox (usado por pyautogui)."""
+    """Encontra e foca a janela do PyMsgBox (usado por pyautogui) e o campo de entrada."""
     if os.name != "nt":
         return
     try:
@@ -366,6 +366,16 @@ def find_and_focus_pymsgbox() -> None:
                     # Procura por janelas do tipo dialog ou PyMsgBox
                     if "#32770" in class_buffer.value or "tk" in class_buffer.value.lower():
                         make_window_topmost(hwnd)
+                        # Focar no campo de entrada dentro da janela
+                        try:
+                            # Procurar controle Edit (campo de texto) dentro da janela
+                            edit_hwnd = user32.FindWindowExW(hwnd, None, "Edit", None)
+                            if edit_hwnd:
+                                user32.SetFocus(edit_hwnd)
+                                # Selecionar todo o texto para facilitar digitação
+                                user32.SendMessageW(edit_hwnd, 0x00B1, 0, -1)  # EM_SETSEL
+                        except Exception:
+                            pass
             return True
         
         EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
