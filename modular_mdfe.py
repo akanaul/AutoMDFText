@@ -1382,12 +1382,38 @@ def main() -> None:
         log("Voltando para aba 1 e focando em 'empresa'")
         pyautogui.hotkey("ctrl", "1")
         time.sleep(0.5)
-        # Buscar "empresa" para garantir foco correto
-        pyautogui.hotkey("ctrl", "f")
-        time.sleep(1)
-        pyautogui.write("empresa", interval=0.10)
-        pyautogui.press("esc")
-        time.sleep(0.5)
+        # Tab para garantir foco correto
+        pyautogui.press("tab")
+        time.sleep(0.2)
+
+        # VALIDAÇÃO DA PÁGINA CT-E (antes do prompt de DT)
+        log("Validando página CT-e antes de solicitar DT...")
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        time.sleep(3)
+        try:
+            conteudo_validacao = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
+            log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
+            
+            # Verificar se a página contém "NÚMERO CT-E"
+            conteudo_upper = conteudo_validacao.upper()
+            if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
+                log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
+                focused_alert(
+                    "ERRO: Não foi possível identificar a página do CT-e.\n\n"
+                    "A informação 'NÚMERO CT-E' não foi encontrada na página.\n"
+                    "A automação será interrompida.",
+                    title="Página Incorreta"
+                )
+                raise SystemExit(1)
+            
+            log("'NÚMERO CT-E' confirmado. Página válida para continuar.")
+        except SystemExit as e:
+            # Re-lançar SystemExit para interromper automação
+            if e.code == 1:
+                raise
+            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado durante validação.")
+            raise SystemExit(1)
 
         # Prompt para DT ANTES de buscar o campo
         prompt_text = profile.get_value("general", "dt_prompt_text")
@@ -1453,38 +1479,26 @@ def main() -> None:
         log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
         time.sleep(0.3)
 
-        # Detectar primeira tela (CT-e) APÓS inserir o DT e NCM
-        log("Detectando tela CT-e (notas emitidas: ct-e)")
-        log("Aguardando 4 segundos para o site carregar antes de copiar...")
-        pyautogui.press("tab")
-        time.sleep(0.2)
-        time.sleep(3)
+        # Extrair CT-e da página (já validada anteriormente)
+        log("Extraindo CT-e da página já validada...")
         numero_cte = ""
         try:
-            conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
-            log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
+            # Reler conteúdo da página para extrair CT-e
+            pyautogui.hotkey("ctrl", "a")
+            time.sleep(0.2)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.2)
+            conteudo_cte_pagina = pyperclip.paste() or ""
             
-            # Verificar se a página contém "NÚMERO CT-E"
-            conteudo_upper = conteudo_cte_pagina.upper()
-            if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
-                log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
-                focused_alert(
-                    "ERRO: Não foi possível identificar a página do CT-e.\n\n"
-                    "A informação 'NÚMERO CT-E' não foi encontrada na página.\n"
-                    "A automação será interrompida.",
-                    title="Página Incorreta"
-                )
-                raise SystemExit(1)
-            
-            log("'NÚMERO CT-E' confirmado. Extraindo CT-e do conteúdo capturado...")
+            log("Extraindo CT-e do conteúdo capturado...")
             numero_cte = extract_cte_from_content(conteudo_cte_pagina)
             if numero_cte:
                 log(f"CT-e extraído com sucesso: {numero_cte}")
                 pyperclip.copy(numero_cte)
             else:
                 log("Aviso: Não foi possível extrair CT-e do conteúdo.")
-        except SystemExit:
-            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado. Continuando sem CT-e capturado.")
+        except Exception as e:
+            log(f"Erro ao extrair CT-e: {e}")
             numero_cte = ""
 
         # Alerta solicitando download do XML
