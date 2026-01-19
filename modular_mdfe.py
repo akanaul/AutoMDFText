@@ -624,20 +624,6 @@ def focus_browser_if_needed() -> None:
     log("Win+1 não focou o navegador; evitando minimizar e mantendo estado.")
 
 
-def extract_cte_from_content(conteudo: str) -> str:
-    """Extrai o número do CT-e do conteúdo capturado.
-    Assume que a verificação de 'NÚMERO CT-E' já foi feita antes."""
-    linhas = conteudo.splitlines()
-    for linha in linhas:
-        # Padrão: "100 - Autorizado o uso do CT-e.N" seguido de número com 6 dígitos
-        if "100 - Autorizado o uso do CT-e" in linha:
-            # Extrai 6 dígitos consecutivos após "CT-e"
-            match = re.search(r'CT-e\.?[^\d]*(\d{6})', linha)
-            if match:
-                return match.group(1)
-    return ""
-
-
 def upload_latest_xml() -> None:
     time.sleep(1)
     downloads_path = Path.home() / "Downloads"
@@ -1245,50 +1231,16 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         pyautogui.hotkey("ctrl", "v")
     time.sleep(0.5)
 
-    # CT-e: se já temos do início, usar direto; caso contrário, fallback
+    # CT-e: usar o valor informado pelo usuário
     pyautogui.write(" CTE: ", interval=0.1)
     time.sleep(0.5)
     if numero_cte:
-        log(f"Usando CT-e capturado no início: {numero_cte}")
+        log(f"Usando CT-e informado pelo usuário: {numero_cte}")
         pyperclip.copy(numero_cte)
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.5)
     else:
-        log("CT-e ausente; iniciando fallback na INVOISYS para capturar.")
-        pyautogui.hotkey("ctrl", "1")
-        time.sleep(0.5)
-        pyautogui.hotkey("ctrl", "f")
-        time.sleep(0.5)
-        pyautogui.write("DO DT", interval=0.2)
-        pyautogui.press("esc")
-        time.sleep(0.2)
-        pyautogui.press("tab")
-        time.sleep(0.2)
-
-        # Copiar página e extrair CT-e
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.7)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.8)
-        conteudo = pyperclip.paste()
-        linhas = conteudo.splitlines()
-        numero_cte_local = ""
-        for linha in linhas:
-            if "100 - Autorizado o uso do CT-e.N" in linha:
-                m = re.search(r"100\s*-\s*Autorizado o uso do CT-e\.N[^\d]*(\d{6})", linha)
-                if m:
-                    numero_cte_local = m.group(1)
-                    break
-
-        # Voltar para a aba de preenchimento e colar somente CT-e se encontrado
-        pyautogui.hotkey("alt", "tab")
-        time.sleep(0.5)
-        if numero_cte_local:
-            log(f"Número do CT-e encontrado (fallback): {numero_cte_local}")
-            pyperclip.copy(numero_cte_local)
-            pyautogui.hotkey("ctrl", "v")
-        else:
-            log("Não foi possível localizar o número do CT-e (fallback); deixar em branco.")
+        log("CT-e não informado; campo ficará vazio")
         time.sleep(0.5)
 
     # Finalizar com rótulo NF sempre; deixa vazio se não informado
@@ -1464,45 +1416,14 @@ def main() -> None:
         log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
         time.sleep(0.3)
 
-        # Detectar e extrair CT-e da página após preenchimento do DT
-        log("Aguardando página CT-e carregar após inserção do DT...")
-        pyautogui.press("tab")
-        time.sleep(0.2)
-        time.sleep(3)
+        # Prompt para informar CT-e manualmente com aviso sobre XML
+        log("Exibindo prompt para informar CT-e com aviso de download XML")
+        numero_cte = focused_prompt(
+            text="Informe o número do CT-e:\n\n*** IMPORTANTE: Download do arquivo XML é OBRIGATÓRIO ***",
+            title="Número CT-e"
+        ) or ""
+        log(f"CT-e informado: '{numero_cte}'")
         
-        numero_cte = ""
-        try:
-            conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
-            log("Página CT-e detectada após DT. Extraindo CT-e...")
-            numero_cte = extract_cte_from_content(conteudo_cte_pagina)
-            if numero_cte:
-                log(f"CT-e extraído com sucesso: {numero_cte}")
-                pyperclip.copy(numero_cte)
-            else:
-                log("Aviso: Não foi possível extrair CT-e do conteúdo.")
-        except SystemExit:
-            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado. Continuando sem CT-e capturado.")
-            numero_cte = ""
-        except Exception as e:
-            log(f"Erro ao extrair CT-e: {e}")
-            numero_cte = ""
-
-        # Alerta solicitando download do XML
-        log("Exibindo alerta para download do XML")
-        xml_alert = profile.get_value("general", "xml_download_alert")
-        if not xml_alert:
-            # Compatibilidade com padrão anterior: usar alert_intro se existir
-            xml_alert = profile.get_value("general", "alert_intro")
-        if not xml_alert:
-            # Hardcode apenas se não houver chave no perfil (não padrão antigo)
-            xml_alert = (
-                'BAIXE O ARQUIVO XML:\n\n'
-                '1. Faça o download do arquivo XML da DT buscada;\n'
-                '2. Aguarde o download ser concluído;\n'
-                '3. Clique em OK para continuar a automação.\n\n'
-                'OBS: Para interromper o processo, mova o mouse repetidamente para o canto superior direito da tela.'
-            )
-        focused_alert(xml_alert)
         # Desativar Caps Lock
         ensure_caps_off()
         

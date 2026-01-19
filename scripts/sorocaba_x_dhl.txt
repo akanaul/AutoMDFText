@@ -1,6 +1,5 @@
 [GENERAL]
 dt_prompt_text = Digite o número do DT:
-alert_intro = Baixe o arquivo XML antes de prosseguir.
 
 [MDFE]
 prestador_tipo = PRESTADOR
