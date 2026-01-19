@@ -1440,16 +1440,22 @@ def main() -> None:
         log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
         time.sleep(0.3)
 
-        # Prompt para informar CT-e manualmente com aviso sobre XML
-        log("Exibindo prompt para informar CT-e com aviso de download XML")
+        # Aviso inicial para baixar o CT-e, seguido do prompt do número
+        log("Exibindo aviso para baixar o CT-e antes de seguir")
+        focused_alert(
+            text=(
+                "Antes de prosseguir, faça o download do XML do CT-e correspondente \n"
+                "à DT e mantenha-o salvo. Em seguida clique em OK para continuar."
+            ),
+            title="Aviso: Baixe o CT-e"
+        )
         numero_cte = focused_prompt(
-            text="Informe o número do CT-e:\n\n*** IMPORTANTE: Download do arquivo XML é OBRIGATÓRIO ***",
+            text="Informe o número do CT-e (XML já baixado):",
             title="Número CT-e"
         ) or ""
         log(f"CT-e informado: '{numero_cte}'")
         pyautogui.press("esc")
         time.sleep(0.15)
-        # Desativar Caps Lock
         ensure_caps_off()
         
         ui_print("Preenchendo formulário MDF-e...", style="step")
