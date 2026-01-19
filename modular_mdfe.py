@@ -218,11 +218,13 @@ def choose_profile(interactive_list: list[str]) -> str:
             print(f"{BOLD}{GREEN}  SELEÇÃO DE SCRIPT - AUTOMAÇÃO MDF-e{RESET}")
             print(f"{CYAN}{'=' * 60}{RESET}\n")
             
+            print(f"{YELLOW}  [0]{RESET} Voltar ao menu anterior\n")
+            
             for idx, name in enumerate(interactive_list, start=1):
                 print(f"{YELLOW}  [{idx}]{RESET} {name}")
             
             print(f"\n{CYAN}{'─' * 60}{RESET}")
-            print(f"{BOLD}Digite o número do script desejado:{RESET}")
+            print(f"{BOLD}Digite o número do script desejado (ou 0 para voltar):{RESET}")
             print(f"{CYAN}{'─' * 60}{RESET}\n")
             
             choice = input(f"{BOLD}Opção: {RESET}").strip()
@@ -233,6 +235,12 @@ def choose_profile(interactive_list: list[str]) -> str:
                 log("Entrada vazia; solicitando nova seleção.")
                 time.sleep(1.5)
                 continue
+            
+            # Verificar opção "0" para voltar
+            if choice == "0":
+                print(f"\n{GREEN}✓ Retornando ao menu anterior...{RESET}\n")
+                log("Usuário escolheu retornar ao menu anterior")
+                raise SystemExit(99)
             
             # Tentar converter para número
             if choice.isdigit():
@@ -505,7 +513,8 @@ def focus_browser_if_needed() -> None:
 
 
 def extract_cte_from_content(conteudo: str) -> str:
-    """Extrai o número do CT-e do conteúdo capturado."""
+    """Extrai o número do CT-e do conteúdo capturado.
+    Assume que a verificação de 'NÚMERO CT-E' já foi feita antes."""
     linhas = conteudo.splitlines()
     for linha in linhas:
         # Padrão: "100 - Autorizado o uso do CT-e.N" seguido de número com 6 dígitos
@@ -1364,7 +1373,21 @@ def main() -> None:
         numero_cte = ""
         try:
             conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
-            log("Página CT-e detectada. Extraindo CT-e do conteúdo capturado...")
+            log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
+            
+            # Verificar se a página contém "NÚMERO CT-E"
+            conteudo_upper = conteudo_cte_pagina.upper()
+            if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
+                log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
+                focused_alert(
+                    "ERRO: Não foi possível identificar a página do CT-e.\n\n"
+                    "A informação 'NÚMERO CT-E' não foi encontrada na página.\n"
+                    "A automação será interrompida.",
+                    title="Página Incorreta"
+                )
+                raise SystemExit(1)
+            
+            log("'NÚMERO CT-E' confirmado. Extraindo CT-e do conteúdo capturado...")
             numero_cte = extract_cte_from_content(conteudo_cte_pagina)
             if numero_cte:
                 log(f"CT-e extraído com sucesso: {numero_cte}")
