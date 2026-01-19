@@ -82,6 +82,7 @@ def resume_automation_timer() -> None:
         _automation_time_paused += time.monotonic() - _pause_start_time
         _pause_start_time = 0.0
 
+    log(f"[DEBUG PAUSE] Resuming timer. Total paused so far: {_automation_time_paused}s")
 
 def format_duration(seconds: float) -> str:
     """Formata duracao em segundos para o formato MM:SS ou apenas SS."""
@@ -486,8 +487,10 @@ def find_and_focus_pymsgbox() -> None:
                             edit_hwnd = user32.FindWindowExW(hwnd, None, "Edit", None)
                             if edit_hwnd:
                                 user32.SetFocus(edit_hwnd)
+                                time.sleep(0.05)
                                 # Selecionar todo o texto para facilitar digitação
                                 user32.SendMessageW(edit_hwnd, 0x00B1, 0, -1)  # EM_SETSEL
+                                return False  # Parar de enumerar
                         except Exception:
                             pass
             return True
@@ -502,14 +505,14 @@ def focused_prompt(text: str = "", title: str = "", default: str = ""):
     """Wrapper para pyautogui.prompt com foco garantido."""
     pause_automation_timer()  # Pausar timer durante prompt
     ensure_prompt_focus()
-    time.sleep(0.1)
+    time.sleep(0.2)
     
     # Criar um timer para forçar topmost logo após a janela ser criada
     def force_topmost():
-        time.sleep(0.15)
+        time.sleep(0.3)
         find_and_focus_pymsgbox()
     
-    timer = threading.Timer(0.05, force_topmost)
+    timer = threading.Timer(0.1, force_topmost)
     timer.daemon = True
     timer.start()
     
@@ -526,14 +529,14 @@ def focused_alert(text: str = "", title: str = "", button: str = "OK"):
     """Wrapper para pyautogui.alert com foco garantido."""
     pause_automation_timer()  # Pausar timer durante alert
     ensure_prompt_focus()
-    time.sleep(0.1)
+    time.sleep(0.2)
     
     # Criar um timer para forçar topmost logo após a janela ser criada
     def force_topmost():
-        time.sleep(0.15)
+        time.sleep(0.3)
         find_and_focus_pymsgbox()
     
-    timer = threading.Timer(0.05, force_topmost)
+    timer = threading.Timer(0.1, force_topmost)
     timer.daemon = True
     timer.start()
     
@@ -550,14 +553,14 @@ def focused_confirm(text: str = "", title: str = "", buttons=None):
     """Wrapper para pyautogui.confirm com foco garantido."""
     pause_automation_timer()  # Pausar timer durante confirm
     ensure_prompt_focus()
-    time.sleep(0.1)
+    time.sleep(0.2)
     
     # Criar um timer para forçar topmost logo após a janela ser criada
     def force_topmost():
-        time.sleep(0.15)
+        time.sleep(0.3)
         find_and_focus_pymsgbox()
     
-    timer = threading.Timer(0.05, force_topmost)
+    timer = threading.Timer(0.1, force_topmost)
     timer.daemon = True
     timer.start()
     
@@ -1257,12 +1260,12 @@ def main() -> None:
     try:
         # Iniciar contadores de tempo
         real_start_time = time.monotonic()
-        _automation_start_time = time.monotonic()
         _automation_time_paused = 0.0
         
         # Sleep inicial para aguardar inicialização
         time.sleep(0.7)
         log("Iniciando automação (main)")
+        log(f"[DEBUG] real_start_time={real_start_time}")
         
         # Limpar tela e mostrar header
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -1295,6 +1298,11 @@ def main() -> None:
 
         profile = ConfigProfile(profile_path)
         log(f"Perfil carregado com sucesso de: {profile_path}")
+
+        # Iniciar cronômetro de automação apenas após a escolha do perfil
+        _automation_start_time = time.monotonic()
+        _automation_time_paused = 0.0
+        log(f"[DEBUG] _automation_start_time iniciado após escolha do perfil: {_automation_start_time}")
 
         ui_print("Iniciando preenchimento...", style="step")
         
@@ -1337,10 +1345,15 @@ def main() -> None:
             if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
                 log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
                 focused_alert(
-                    "ERRO: Não foi possível identificar a página do CT-e.\n\n"
-                    "A informação 'NÚMERO CT-E' não foi encontrada na página.\n"
-                    "A automação será interrompida.",
-                    title="Página Incorreta"
+                    "ERRO: Página de CT-e não foi reconhecida!\n\n"
+                    "A automação foi interrompida porque não foi possível identificar\n"
+                    "a página correta de notas emitidas (CT-e).\n\n"
+                    "Verifique:\n"
+                    "• Se você está na página correta do sistema\n"
+                    "• Se a DT foi processada corretamente\n"
+                    "• Se há conexão com o servidor\n\n"
+                    "A automação será encerrada.",
+                    title="ERRO: Página CT-e não Reconhecida"
                 )
                 raise SystemExit(1)
             
@@ -1349,7 +1362,18 @@ def main() -> None:
             # Re-lançar SystemExit para interromper automação
             if e.code == 1:
                 raise
-            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado durante validação.")
+            log("Aviso: Página de CT-e não foi encontrada durante validação.")
+            focused_alert(
+                "ERRO: Página de CT-e não foi encontrada!\n\n"
+                "A automação foi interrompida porque a página esperada\n"
+                "de notas emitidas (CT-e) não foi detectada.\n\n"
+                "Verifique:\n"
+                "• Se você está logado no sistema\n"
+                "• Se a DT é válida e existe no sistema\n"
+                "• Se há notas emitidas para esta DT\n\n"
+                "A automação será encerrada.",
+                title="ERRO: Página de CT-e não Encontrada"
+            )
             raise SystemExit(1)
 
         # Prompt para DT ANTES de buscar o campo
@@ -1423,7 +1447,8 @@ def main() -> None:
             title="Número CT-e"
         ) or ""
         log(f"CT-e informado: '{numero_cte}'")
-        
+        pyautogui.press("esc")
+        time.sleep(0.15)
         # Desativar Caps Lock
         ensure_caps_off()
         
@@ -1460,6 +1485,11 @@ def main() -> None:
         
         real_duration = real_end_time - real_start_time
         automation_duration = (automation_end_time - _automation_start_time) - _automation_time_paused
+        
+        log(f"[DEBUG TIMING] real_end_time={real_end_time}, automation_end_time={automation_end_time}")
+        log(f"[DEBUG TIMING] _automation_start_time={_automation_start_time}, _automation_time_paused={_automation_time_paused}")
+        log(f"[DEBUG TIMING] real_duration calc: {real_end_time} - {real_start_time} = {real_duration}")
+        log(f"[DEBUG TIMING] automation_duration calc: ({automation_end_time} - {_automation_start_time}) - {_automation_time_paused} = {automation_duration}")
         
         # Restaurar o terminal como popup e emitir beep baixo
         restore_console_popup()
