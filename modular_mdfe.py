@@ -25,17 +25,123 @@ LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 # Handle for single-instance mutex to keep it alive during process lifetime
 _SINGLETON_MUTEX_HANDLE = None
 
+# Variáveis de tracking de tempo
+_automation_start_time = 0.0
+_automation_time_paused = 0.0
+_pause_start_time = 0.0
+
 
 def log(msg: str) -> None:
+    """Registra mensagem apenas no arquivo de log, sem imprimir no console."""
     ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
     line = f"[{ts}] {msg}"
-    print(line)
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         # Não interromper fluxo por falha de log em disco
         pass
+
+
+def ui_print(msg: str, style: str = "info") -> None:
+    """Imprime mensagem formatada no console estilo GUI."""
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    BLUE = "\033[94m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+    
+    if style == "success":
+        print(f"{GREEN}✓{RESET} {msg}")
+    elif style == "error":
+        print(f"{RED}✗{RESET} {msg}")
+    elif style == "warning":
+        print(f"{YELLOW}⚠{RESET} {msg}")
+    elif style == "step":
+        print(f"{BLUE}▸{RESET} {msg}")
+    elif style == "header":
+        print(f"\n{CYAN}{'═' * 60}{RESET}")
+        print(f"{BOLD}{msg}{RESET}")
+        print(f"{CYAN}{'═' * 60}{RESET}\n")
+    else:
+        print(f"  {msg}")
+
+
+def pause_automation_timer() -> None:
+    """Pausa o contador de tempo de automação (usado durante prompts)."""
+    global _pause_start_time
+    _pause_start_time = time.monotonic()
+
+
+def resume_automation_timer() -> None:
+    """Resume o contador de tempo de automação após prompt."""
+    global _automation_time_paused, _pause_start_time
+    if _pause_start_time > 0:
+        _automation_time_paused += time.monotonic() - _pause_start_time
+        _pause_start_time = 0.0
+
+
+def format_duration(seconds: float) -> str:
+    """Formata duracao em segundos para o formato MM:SS ou apenas SS."""
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    if minutes > 0:
+        return f"{minutes}m {secs}s"
+    else:
+        return f"{secs}s"
+
+
+# ============================================================================
+# FUNÇÕES HELPER PARA CONSOLIDAR AÇÕES COM LOGS
+# ============================================================================
+
+def find_and_fill(search_text: str, fill_value: str, log_msg: str = "", use_enter: bool = True) -> None:
+    """Localiza campo, preenche com valor e registra. Consolida log + ação."""
+    msg = log_msg or f"Preenchendo {search_text}: {fill_value}"
+    log(msg)
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
+    pyautogui.write(search_text, interval=0.10)
+    time.sleep(0.2)
+    pyautogui.press("esc")
+    time.sleep(0.3)
+    pyautogui.press("tab")
+    time.sleep(0.2)
+    pyautogui.write(fill_value, interval=0.10)
+    if use_enter:
+        pyautogui.press("enter")
+        time.sleep(0.3)
+
+
+def find_text(search_text: str, log_msg: str = "") -> None:
+    """Localiza texto na página com Ctrl+F."""
+    msg = log_msg or f"Procurando por '{search_text}'"
+    log(msg)
+    pyautogui.hotkey("ctrl", "f")
+    time.sleep(0.3)
+    pyautogui.write(search_text, interval=0.10)
+    time.sleep(0.2)
+    pyautogui.press("esc")
+    time.sleep(0.3)
+
+
+def fill_field(value: str, log_msg: str = "", interval: float = 0.10) -> None:
+    """Preenche campo atual com valor."""
+    if log_msg:
+        log(log_msg)
+    pyautogui.write(value, interval=interval)
+    time.sleep(0.2)
+
+
+def skip_tabs(count: int, log_msg: str = "") -> None:
+    """Pula N campos (tabs) com log opcional."""
+    if log_msg:
+        log(log_msg)
+    for _ in range(count):
+        pyautogui.press("tab")
+        time.sleep(0.25)
 
 
 def parse_profile(path: Path) -> dict[str, dict[str, str]]:
@@ -205,8 +311,8 @@ def choose_profile(interactive_list: list[str]) -> str:
             # Revalidar lista a cada iteração (caso arquivos sejam adicionados/removidos)
             current_list = list_profiles()
             if not current_list:
-                log("Lista de scripts ficou vazia durante seleção; usando template padrão.")
-                return default
+                log("Lista de scripts ficou vazia durante seleção; sem perfil padrão disponível.")
+                raise SystemExit(1)
             
             # Atualizar lista se mudou
             if current_list != interactive_list:
@@ -283,8 +389,8 @@ def choose_profile(interactive_list: list[str]) -> str:
     
     # Verificação de segurança
     if not selected_profile:
-        log(f"Número máximo de tentativas atingido ({max_attempts}); usando template padrão.")
-        return default
+        log(f"Número máximo de tentativas atingido ({max_attempts}); nenhum perfil selecionado.")
+        raise SystemExit(1)
     
     print(f"\n{GREEN}✓ Script selecionado: {BOLD}{selected_profile}{RESET}\n")
     print(f"{CYAN}{'=' * 60}{RESET}\n")
@@ -394,6 +500,7 @@ def find_and_focus_pymsgbox() -> None:
 
 def focused_prompt(text: str = "", title: str = "", default: str = ""):
     """Wrapper para pyautogui.prompt com foco garantido."""
+    pause_automation_timer()  # Pausar timer durante prompt
     ensure_prompt_focus()
     time.sleep(0.1)
     
@@ -410,12 +517,14 @@ def focused_prompt(text: str = "", title: str = "", default: str = ""):
         result = pyautogui.prompt(text=text, title=title, default=default)
     finally:
         timer.cancel()
+        resume_automation_timer()  # Resumir timer após prompt
     
     return result
 
 
 def focused_alert(text: str = "", title: str = "", button: str = "OK"):
     """Wrapper para pyautogui.alert com foco garantido."""
+    pause_automation_timer()  # Pausar timer durante alert
     ensure_prompt_focus()
     time.sleep(0.1)
     
@@ -432,12 +541,14 @@ def focused_alert(text: str = "", title: str = "", button: str = "OK"):
         result = pyautogui.alert(text=text, title=title, button=button)
     finally:
         timer.cancel()
+        resume_automation_timer()  # Resumir timer após alert
     
     return result
 
 
 def focused_confirm(text: str = "", title: str = "", buttons=None):
     """Wrapper para pyautogui.confirm com foco garantido."""
+    pause_automation_timer()  # Pausar timer durante confirm
     ensure_prompt_focus()
     time.sleep(0.1)
     
@@ -454,6 +565,7 @@ def focused_confirm(text: str = "", title: str = "", buttons=None):
         result = pyautogui.confirm(text=text, title=title, buttons=buttons)
     finally:
         timer.cancel()
+        resume_automation_timer()  # Resumir timer após confirm
     
     return result
     return result_container[0]
@@ -671,17 +783,19 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     """Preenche dados do MDF-e - cópia exata do script legado
     Recebe o código NCM já selecionado como parâmetro."""
     time.sleep(1)
+    log("Iniciando preenchimento MDF-e: PRESTADOR DE SERVIÇO, EMITENTE, UF, MUNICÍPIO")
+    
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
-    log(f"Preenchendo PRESTADOR DE SERVIÇO: {profile.get_value('mdfe', 'prestador_tipo')}")
     pyautogui.write("SELECIONE...", interval=0.20)
     time.sleep(0.2)
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.3)
-    pyautogui.write(profile.get_value("mdfe", "prestador_tipo"), interval=0.1)
+    prestador = profile.get_value('mdfe', 'prestador_tipo')
+    pyautogui.write(prestador, interval=0.1)
     time.sleep(0.5)
     pyautogui.press("enter")
     time.sleep(0.3)
@@ -692,21 +806,16 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
 
     # EMITENTE
     emitente = profile.get_value("mdfe", "emitente_codigo")
-    log(f"Preenchendo EMITENTE: {emitente}")
     pyautogui.write(emitente, interval=0.10)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.7)
-
-    for _ in range(7):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(7)
     pyautogui.press("space")
     time.sleep(0.3)
 
     # UF CARREGAMENTO E DESCARREGAMENTO
     uf_car = profile.get_value("mdfe", "uf_carregamento")
-    log(f"Preenchendo UF CARREGAMENTO: {uf_car}")
     pyautogui.write(uf_car, interval=0.20)
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -716,7 +825,6 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("space")
     time.sleep(0.3)
     uf_desc = profile.get_value("mdfe", "uf_descarga")
-    log(f"Preenchendo UF DESCARGA: {uf_desc}")
     pyautogui.write(uf_desc, interval=0.20)
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -726,7 +834,6 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("tab")
     time.sleep(0.2)
     municipio = profile.get_value("mdfe", "municipio_carregamento").upper()
-    log(f"Preenchendo MUNICIPIO CARREGAMENTO: {municipio}")
     pyautogui.write(municipio, interval=0.15)
     time.sleep(0.3)
 
@@ -739,12 +846,15 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("enter")
     time.sleep(0.3)
 
+    log(f"MDF-e: Prestador={prestador}, Emitente={emitente}, UF_Car={uf_car}, UF_Desc={uf_desc}, Municipio={municipio}")
+    
     # UPLOAD DO ARQUIVO XML
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.2)
     pyautogui.press("space")
     time.sleep(1.5)
+    log("Carregando arquivo XML...")
     upload_latest_xml()
     time.sleep(0.5)
     for _ in range(2):
@@ -753,23 +863,17 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("enter")
     time.sleep(1.5)
 
-    # UNIDADE DE MEDIDA
-    for _ in range(5):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    # UNIDADE DE MEDIDA, TIPO CARGA E DESCRIÇÃO
+    skip_tabs(5)
     pyautogui.press("space")
     time.sleep(0.2)
     unidade = profile.get_value("mdfe", "unidade_medida")
-    log(f"Preenchendo UNIDADE MEDIDA: {unidade}")
     pyautogui.write(unidade, interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
 
-    # TIPO DE CARGA
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(2)
     pyautogui.press("space")
     time.sleep(0.2)
     pyautogui.press("tab")
@@ -777,11 +881,12 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
     carga = profile.get_value("mdfe", "carga_tipo")
-    log(f"Preenchendo TIPO CARGA: {carga}")
     pyautogui.write(carga, interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
+
+    log(f"MDF-e: Unidade={unidade}, Tipo_Carga={carga}")
 
     # DESCRIÇÃO DO PRODUTO
     pyautogui.press("tab")
@@ -792,17 +897,15 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     time.sleep(0.2)
 
     # CÓDIGO NCM (já selecionado e passado como parâmetro)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(2)
     
-    log(f"Inserindo código NCM: {codigo_ncm}")
-    pyautogui.write(codigo_ncm.upper(), interval=0.1)
+    codigo_ncm_upper = codigo_ncm.upper()
+    pyautogui.write(codigo_ncm_upper, interval=0.1)
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.3)
 
-    # CEP ORIGEM
+    # CEP ORIGEM E DESTINO
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("space")
@@ -810,31 +913,27 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("tab")
     time.sleep(0.2)
     cep_orig = profile.get_value("mdfe", "cep_origem")
-    log(f"Preenchendo CEP ORIGEM: {cep_orig}")
     pyautogui.write(cep_orig, interval=0.1)
     time.sleep(0.3)
 
-    # CEP DESTINO
-    for _ in range(3):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(3)
     cep_dest = profile.get_value("mdfe", "cep_destino")
-    log(f"Preenchendo CEP DESTINO: {cep_dest}")
     pyautogui.write(cep_dest, interval=0.1)
     time.sleep(1.25)
+    
+    log(f"MDF-e concluído: NCM={codigo_ncm_upper}, CEP_Orig={cep_orig}, CEP_Dest={cep_dest}")
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
-    # ABRIR DADOS DO MODAL RODOVIÁRIO
+    """Preenche dados do Modal Rodoviário"""
+    log("Iniciando preenchimento Modal Rodoviário")
     time.sleep(1.5)
+    
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
-    log("Procurando por 'modal rodo'")
     pyautogui.write("modal rodo", interval=0.10)
     time.sleep(0.2)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.2)
+    skip_tabs(2)
     pyautogui.press("enter")
     time.sleep(1.25)
     pyautogui.press("esc")
@@ -842,7 +941,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(1.25)
 
-    # RNTRC
+    # RNTRC, CONTRATANTE, CNPJ
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.3)
     pyautogui.write("RNTRC", interval=0.10)
@@ -852,45 +951,38 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     time.sleep(0.2)
     rntrc = profile.get_value("modal_rodoviario", "rntrc")
-    log(f"Preenchendo RNTRC: {rntrc}")
     pyautogui.write(rntrc, interval=0.10)
     time.sleep(0.2)
     
-    # NOME DO CONTRATANTE
-    for _ in range(6):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(6)
     pyautogui.press("space")
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     contratante = profile.get_value("modal_rodoviario", "contratante_nome")
-    log(f"Preenchendo CONTRATANTE: {contratante}")
     pyautogui.write(contratante, interval=0.20)
     time.sleep(0.2)
 
-    # CNPJ DO CONTRATATANTE
     pyautogui.press("tab")
     time.sleep(0.2)
     cnpj_cont = profile.get_value("modal_rodoviario", "contratante_cnpj")
-    log(f"Preenchendo CNPJ CONTRATANTE: {cnpj_cont}")
     pyautogui.write(cnpj_cont, interval=0.12)
     time.sleep(0.2)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.15)
+    skip_tabs(2)
     pyautogui.press("enter")
     time.sleep(1.25)
+    
+    log(f"Modal Rodoviário: RNTRC={rntrc}, Contratante={contratante}, CNPJ={cnpj_cont}")
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
-    # ABRIR DADOS DE INFORMAÇÕES OPCIONAIS
+    """Preenche Informações Adicionais (Seguradora, Frete, Banco, etc)"""
+    log("Iniciando preenchimento Informações Adicionais")
+    
+    # ABRIR SEÇÃO OPCIONAIS
     pyautogui.hotkey("ctrl", "f")
-    log("Procurando por 'OPCIONAIS'")
     pyautogui.write("OPCIONAIS", interval=0.10)
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.1)
+    skip_tabs(2)
     pyautogui.press("enter")
     time.sleep(1)
     pyautogui.press("esc")
@@ -898,10 +990,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(1)
 
-    # INFORMAÇÕES ADICIONAIS
+    # ADICIONAIS - CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
     time.sleep(0.5)
-    log("Procurando por 'ADICIONAIS'")
     pyautogui.write("ADICIONAIS", interval=0.10)
     time.sleep(0.3)
     pyautogui.press("esc")
@@ -915,19 +1006,14 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
-    for _ in range(3):
-        pyautogui.press("tab")
-        time.sleep(0.3)
+    skip_tabs(3)
     cnpj_contrib = profile.get_value("informacoes_adicionais", "contribuinte_cnpj")
-    log(f"Preenchendo CONTRIBUINTE CNPJ: {cnpj_contrib}")
     pyautogui.write(cnpj_contrib, interval=0.10)
     pyautogui.press("tab")
     time.sleep(0.3)
     pyautogui.press("enter")
 
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.2)
+    skip_tabs(2)
     pyautogui.press("space")
     time.sleep(0.2)
     pyautogui.press("tab")
@@ -937,52 +1023,43 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.write("CONTRA", interval=0.10)
     pyautogui.press("enter")
     time.sleep(0.3)
+    
+    # Seguradora e dados relacionados
     pyautogui.press("tab")
     cnpj_cont2 = profile.get_value("modal_rodoviario", "contratante_cnpj")
-    log(f"Preenchendo CNPJ CONTRATANTE (CONTRA): {cnpj_cont2}")
     pyautogui.write(cnpj_cont2, interval=0.12)
     pyautogui.press("tab")
     seguradora = profile.get_value("informacoes_adicionais", "seguradora_nome")
-    log(f"Preenchendo SEGURADORA: {seguradora}")
     pyautogui.write(seguradora, interval=0.10)
     pyautogui.press("tab")
     cnpj_seg = profile.get_value("informacoes_adicionais", "seguradora_cnpj")
-    log(f"Preenchendo CNPJ SEGURADORA: {cnpj_seg}")
     pyautogui.write(cnpj_seg, interval=0.12)
     pyautogui.press("tab")
     apolice = profile.get_value("informacoes_adicionais", "numero_apolice")
-    log(f"Preenchendo NUMERO APOLICE: {apolice}")
     pyautogui.write(apolice, interval=0.10)
     pyautogui.press("tab")
     pyautogui.press("enter")
     time.sleep(0.3)
 
-    for _ in range(4):
-        pyautogui.press("tab")
-        time.sleep(0.2)
+    skip_tabs(4)
     pyautogui.press("space")
     time.sleep(0.2)
 
+    # Contratante 2 e Frete
     pyautogui.press("tab")
     time.sleep(0.2)
     contratante2 = profile.get_value("modal_rodoviario", "contratante_nome")
-    log(f"Preenchendo CONTRATANTE (2): {contratante2}")
     pyautogui.write(contratante2, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
     cnpj_cont3 = profile.get_value("modal_rodoviario", "contratante_cnpj")
-    log(f"Preenchendo CNPJ CONTRATANTE (2): {cnpj_cont3}")
     pyautogui.write(cnpj_cont3, interval=0.12)
     time.sleep(0.2)
 
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-
+    skip_tabs(2)
     frete_val = profile.get_value("informacoes_adicionais", "frete_valor")
-    log(f"Preenchendo FRETE VALOR: {frete_val}")
     pyautogui.write(frete_val, interval=0.12)
     time.sleep(0.2)
 
@@ -991,35 +1068,30 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("space")
     time.sleep(0.2)
     forma_pag = profile.get_value("informacoes_adicionais", "forma_pagamento")
-    log(f"Preenchendo FORMA PAGAMENTO: {forma_pag}")
     pyautogui.write(forma_pag, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("enter")
     time.sleep(0.3)
 
-    # Garantir que o foco chegue no campo "Número do banco" (antes de agência)
+    # Banco e Agência
     pyautogui.press("tab")
     time.sleep(0.2)
     numero_banco = profile.get_value("informacoes_adicionais", "numero_banco")
-    log(f"Preenchendo NUMERO BANCO: {numero_banco}")
     pyautogui.write(numero_banco, interval=0.12)
     time.sleep(0.2)
 
     pyautogui.press("tab")
     time.sleep(0.2)
     agencia = profile.get_value("informacoes_adicionais", "agencia")
-    log(f"Preenchendo AGENCIA: {agencia}")
     pyautogui.write(agencia, interval=0.12)
     time.sleep(0.2)
 
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.3)
-
+    skip_tabs(2)
     pyautogui.press("enter")
     time.sleep(0.3)
 
+    # Seção FRETE
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -1030,7 +1102,6 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.2)
-    log("Preenchendo seção FRETE")
     pyautogui.write("FRETE", interval=0.10)
     time.sleep(0.2)
     pyautogui.press("enter")
@@ -1038,27 +1109,24 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     time.sleep(0.2)
     frete_val2 = profile.get_value("informacoes_adicionais", "frete_valor")
-    log(f"Preenchendo FRETE VALOR (seção): {frete_val2}")
     pyautogui.write(frete_val2, interval=0.12)
     time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     frete_tipo = profile.get_value("informacoes_adicionais", "frete_tipo")
-    log(f"Preenchendo FRETE TIPO: {frete_tipo}")
     pyautogui.write(frete_tipo, interval=0.12)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(0.2)
 
+    # Seção de Parcelas
     pyautogui.hotkey("ctrl", "f")
     pyautogui.write("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
     time.sleep(0.3)
 
-    for _ in range(5):
-        pyautogui.press("tab")
-        time.sleep(0.2)
+    skip_tabs(5)
     numero_parcelas = profile.get_value("informacoes_adicionais", "numero_parcelas")
     if not numero_parcelas:
         log("Perfil sem 'informacoes_adicionais.numero_parcelas' obrigatório")
@@ -1067,19 +1135,14 @@ def fill_additional_info(profile: ConfigProfile) -> None:
             title="Perfil inválido"
         )
         raise SystemExit(1)
-    log(f"Preenchendo NUMERO PARCELAS: {numero_parcelas}")
     pyautogui.write(numero_parcelas, interval=0.10)
     time.sleep(0.15)
 
-    for _ in range(2):
-        pyautogui.press("tab")
-        time.sleep(0.2)
+    skip_tabs(2)
     pyautogui.press("space")
     time.sleep(0.2)
 
-    for _ in range(7):
-        pyautogui.press("tab")
-        time.sleep(0.3)
+    skip_tabs(7)
     for _ in range(2):
         pyautogui.press("space")
         time.sleep(0.3)
@@ -1090,13 +1153,14 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("tab")
     time.sleep(0.3)
     frete_val3 = profile.get_value("informacoes_adicionais", "frete_valor")
-    log(f"Preenchendo FRETE VALOR (final): {frete_val3}")
     pyautogui.write(frete_val3, interval=0.10)
     time.sleep(0.15)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
     time.sleep(1.0)
+    
+    log(f"Info Adicionais: Seguradora={seguradora}, Frete={frete_val}, Banco={numero_banco}, Parcelas={numero_parcelas}")
 
 
 def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str = "") -> None:
@@ -1156,26 +1220,28 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     pyautogui.write("DETALHES", interval=0.1)
     time.sleep(0.3)
     pyautogui.press("esc")
+    time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.4)
+    time.sleep(0.3)
     for _ in range(2):
         pyautogui.press("tab")
         time.sleep(0.3)
     pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.2)
     pyautogui.press("tab")
-    time.sleep(0.4)
+    time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.7)
 
     # Preencher DT/CT-e/NF na área de CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.4)
+    time.sleep(0.3)
     pyautogui.write("CONTRIBUINTE", interval=0.15)
     time.sleep(0.3)
     pyautogui.press("esc")
-    time.sleep(0.4)
+    time.sleep(0.3)
     pyautogui.press("tab")
-    time.sleep(0.4)
+    time.sleep(0.3)
 
     # DT sempre vem do prompt (numero_dt) capturado no início
     pyautogui.write("DT: ", interval=0.1)
@@ -1249,10 +1315,22 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
 
 
 def main() -> None:
+    global _automation_start_time, _automation_time_paused
+    
     try:
+        # Iniciar contadores de tempo
+        real_start_time = time.monotonic()
+        _automation_start_time = time.monotonic()
+        _automation_time_paused = 0.0
+        
         # Sleep inicial para aguardar inicialização
         time.sleep(0.7)
         log("Iniciando automação (main)")
+        
+        # Limpar tela e mostrar header
+        os.system('cls' if os.name == 'nt' else 'clear')
+        ui_print("AUTOMAÇÃO MDF-e", style="header")
+        
         # Impedir execução duplicada
         ensure_single_instance()
         
@@ -1262,8 +1340,10 @@ def main() -> None:
 
         selected = args.profile
         if not selected:
+            log("Exibindo menu de seleção de perfil")
             selected = choose_profile(list_profiles())
         log(f"Perfil selecionado: {selected}")
+        ui_print(f"Perfil: {selected}", style="success")
         profile_path = CONFIG_DIR / selected
         if not profile_path.exists():
             log(f"Perfil {profile_path} não encontrado.")
@@ -1277,8 +1357,10 @@ def main() -> None:
             raise SystemExit(1)
 
         profile = ConfigProfile(profile_path)
-        log(f"Perfil carregado de: {profile_path}")
+        log(f"Perfil carregado com sucesso de: {profile_path}")
 
+        ui_print("Iniciando preenchimento...", style="step")
+        
         # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
         log("Focando navegador (evitando minimizar)")
         focus_browser_if_needed()
@@ -1347,11 +1429,18 @@ def main() -> None:
         log("Exibindo prompt para seleção de NCM")
         codigo_ncm = select_ncm(profile)
         log(f"NCM selecionado e armazenado: {codigo_ncm}")
+        ui_print(f"NCM selecionado: {codigo_ncm}", style="success")
         time.sleep(0.5)
 
         # PROMPTS PARA NFs (NF1/NF2) E CONCATENAÇÃO (opcionais)
+        log("Exibindo prompt para NF1")
         nf1 = focused_prompt(text="Informe a NF1 (opcional):", title="NF1") or ""
+        log(f"NF1 informada: '{nf1}'")
+        
+        log("Exibindo prompt para NF2")
         nf2 = focused_prompt(text="Informe a NF2 (opcional):", title="NF2") or ""
+        log(f"NF2 informada: '{nf2}'")
+        
         # Concatenar apenas se ambas informadas; caso contrário usar a que foi preenchida
         if nf1 and nf2:
             nf_concat = f"{nf1}/{nf2}"
@@ -1417,41 +1506,81 @@ def main() -> None:
         # Desativar Caps Lock
         ensure_caps_off()
         
+        ui_print("Preenchendo formulário MDF-e...", style="step")
+        
         # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
         
         # Preencher formulário (passando codigo_ncm já selecionado)
+        log("Iniciando preenchimento dos dados MDF-e")
         fill_mdfe(profile, codigo_ncm)
-        fill_modal_rodo(profile)
-        fill_additional_info(profile)
-        perform_averbacao(numero_cte, numero_dt, nf_concat)
+        log("Dados MDF-e preenchidos com sucesso")
+        ui_print("Dados MDF-e preenchidos", style="success")
         
-        # Ao finalizar com sucesso, restaurar o terminal como popup e emitir beep baixo
+        log("Iniciando preenchimento do modal rodoviário")
+        fill_modal_rodo(profile)
+        log("Modal rodoviário preenchido com sucesso")
+        ui_print("Modal rodoviário preenchido", style="success")
+        
+        log("Iniciando preenchimento de informações adicionais")
+        fill_additional_info(profile)
+        log("Informações adicionais preenchidas com sucesso")
+        ui_print("Informações adicionais preenchidas", style="success")
+        
+        log("Iniciando processamento de averbação")
+        ui_print("Processando averbação...", style="step")
+        perform_averbacao(numero_cte, numero_dt, nf_concat)
+        log("Averbação processada com sucesso")
+        
+        # Ao finalizar com sucesso, calcular tempos
+        real_end_time = time.monotonic()
+        automation_end_time = time.monotonic()
+        
+        real_duration = real_end_time - real_start_time
+        automation_duration = (automation_end_time - _automation_start_time) - _automation_time_paused
+        
+        # Restaurar o terminal como popup e emitir beep baixo
         restore_console_popup()
         play_low_beep()
         
-        # Exibir resumo no terminal
+        # Exibir resumo no terminal estilo GUI
         GREEN = "\033[92m"
         CYAN = "\033[96m"
         YELLOW = "\033[93m"
         BOLD = "\033[1m"
         RESET = "\033[0m"
         
-        print(f"\n{CYAN}{'=' * 60}{RESET}")
-        print(f"{BOLD}{GREEN}  AUTOMAÇÃO CONCLUÍDA COM SUCESSO!{RESET}")
-        print(f"{CYAN}{'=' * 60}{RESET}\n")
+        print(f"\n{CYAN}{'═' * 60}{RESET}")
+        print(f"{BOLD}{GREEN}  ✓ AUTOMAÇÃO CONCLUÍDA COM SUCESSO!{RESET}")
+        print(f"{CYAN}{'═' * 60}{RESET}\n")
         print(f"{BOLD}Resumo das Informações:{RESET}\n")
         print(f"  {YELLOW}DT:{RESET}      {numero_dt}")
         print(f"  {YELLOW}CT-e:{RESET}    {numero_cte if numero_cte else 'Não capturado'}")
         print(f"  {YELLOW}NCM:{RESET}     {codigo_ncm}")
         print(f"  {YELLOW}NF:{RESET}      {nf_concat if nf_concat else 'Não informado'}")
+        print(f"\n{BOLD}Tempo de Execução:{RESET}\n")
+        print(f"  {YELLOW}Tempo de Automação:{RESET}  {format_duration(automation_duration)} (apenas automação)")
+        print(f"  {YELLOW}Tempo Real:{RESET}          {format_duration(real_duration)} (incluindo prompts)")
         print(f"\n{CYAN}{'─' * 60}{RESET}")
         print(f"{BOLD}Próximos passos:{RESET}")
-        print(f"  • Inclua a NF")
         print(f"  • Preencha os dados do motorista")
-        print(f"\n{CYAN}{'=' * 60}{RESET}\n")
-        log("Automação finalizada com sucesso")
+        print(f"\n{CYAN}{'═' * 60}{RESET}\n")
+        
+        # Pausar 3 segundos para permitir leitura do resumo
+        time.sleep(3)
+        
+        log(f"Automação finalizada com sucesso - Tempo automação: {format_duration(automation_duration)}, Tempo real: {format_duration(real_duration)}")
+        log("═" * 60)
+        log(f"Resumo final: DT={numero_dt}, CT-e={numero_cte if numero_cte else 'Não capturado'}, NCM={codigo_ncm}, NF={nf_concat if nf_concat else 'Não informado'}")
+        log("═" * 60)
+    except SystemExit as e:
+        # Capturar saídas como exit code 99 (menu), 1 (erro), etc
+        if e.code == 99:
+            log("Programa finalizado - usuário retornou ao menu (código 99)")
+        else:
+            log(f"Programa finalizado com código de saída: {e.code}")
+        raise
     except Exception as e:
         import traceback
         error_msg = f"ERRO FATAL: {e}\n{traceback.format_exc()}"
