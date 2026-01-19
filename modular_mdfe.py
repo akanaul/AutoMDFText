@@ -1169,14 +1169,8 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     - Em fallback, captura CT-e na INVOISYS sem atrelar ou sobrescrever o DT
     """
     # Abrir site/aba de averbação e enviar XML
-    pyautogui.hotkey("ctrl", "shift", "a")
+    pyautogui.hotkey("ctrl", "4")
     time.sleep(0.5)
-    pyautogui.write("ATM", interval=0.1)
-    for _ in range(3):
-        pyautogui.press("tab")
-        time.sleep(0.2)
-    pyautogui.press("enter")
-    time.sleep(1)
 
     ##Pequeno hotfix para GAP relacionado a envio de XMLs, verificar alternativas
     for _ in range(2):
@@ -1261,24 +1255,15 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         time.sleep(0.5)
     else:
         log("CT-e ausente; iniciando fallback na INVOISYS para capturar.")
-        pyautogui.hotkey("ctrl", "shift", "a")
+        pyautogui.hotkey("ctrl", "1")
         time.sleep(0.5)
-        pyautogui.write("INVOISYS", interval=0.1)
-        for _ in range(2):
-            pyautogui.press("tab")
-            time.sleep(0.5)
-        pyautogui.press("enter")
-        time.sleep(1)
-
         pyautogui.hotkey("ctrl", "f")
         time.sleep(0.5)
-        pyautogui.write("e final", interval=0.2)
+        pyautogui.write("DO DT", interval=0.2)
         pyautogui.press("esc")
         time.sleep(0.2)
-        for _ in range(2):
-            pyautogui.press("tab")
-            time.sleep(0.1)
-        time.sleep(0.3)
+        pyautogui.press("tab")
+        time.sleep(0.2)
 
         # Copiar página e extrair CT-e
         pyautogui.hotkey("ctrl", "a")
@@ -1479,24 +1464,25 @@ def main() -> None:
         log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
         time.sleep(0.3)
 
-        # Extrair CT-e da página (já validada anteriormente)
-        log("Extraindo CT-e da página já validada...")
+        # Detectar e extrair CT-e da página após preenchimento do DT
+        log("Aguardando página CT-e carregar após inserção do DT...")
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        time.sleep(3)
+        
         numero_cte = ""
         try:
-            # Reler conteúdo da página para extrair CT-e
-            pyautogui.hotkey("ctrl", "a")
-            time.sleep(0.2)
-            pyautogui.hotkey("ctrl", "c")
-            time.sleep(0.2)
-            conteudo_cte_pagina = pyperclip.paste() or ""
-            
-            log("Extraindo CT-e do conteúdo capturado...")
+            conteudo_cte_pagina = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
+            log("Página CT-e detectada após DT. Extraindo CT-e...")
             numero_cte = extract_cte_from_content(conteudo_cte_pagina)
             if numero_cte:
                 log(f"CT-e extraído com sucesso: {numero_cte}")
                 pyperclip.copy(numero_cte)
             else:
                 log("Aviso: Não foi possível extrair CT-e do conteúdo.")
+        except SystemExit:
+            log("Aviso: Texto 'notas emitidas: ct-e' não encontrado. Continuando sem CT-e capturado.")
+            numero_cte = ""
         except Exception as e:
             log(f"Erro ao extrair CT-e: {e}")
             numero_cte = ""
