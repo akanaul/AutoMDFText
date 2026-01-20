@@ -1454,6 +1454,14 @@ def main() -> None:
             title="Número CT-e"
         ) or ""
         log(f"CT-e informado: '{numero_cte}'")
+        if not numero_cte:
+            log("Nenhum número de CT-e informado; encerrando automação conforme solicitado")
+            focused_alert(
+                "ERRO: Nenhum número de CT-e foi informado.\n\n"
+                "A automação será encerrada.",
+                title="CT-e obrigatório"
+            )
+            raise SystemExit(1)
         pyautogui.press("esc")
         time.sleep(0.15)
         ensure_caps_off()
