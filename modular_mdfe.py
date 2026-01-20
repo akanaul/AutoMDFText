@@ -429,7 +429,7 @@ def ensure_prompt_focus() -> None:
         if foreground_thread != current_thread:
             user32.AttachThreadInput(foreground_thread, current_thread, False)
             
-        time.sleep(0.15)
+        time.sleep(0.30)
     except Exception:
         pass
 
@@ -487,7 +487,7 @@ def find_and_focus_pymsgbox() -> None:
                             edit_hwnd = user32.FindWindowExW(hwnd, None, "Edit", None)
                             if edit_hwnd:
                                 user32.SetFocus(edit_hwnd)
-                                time.sleep(0.05)
+                                time.sleep(0.30)
                                 # Selecionar todo o texto para facilitar digitação
                                 user32.SendMessageW(edit_hwnd, 0x00B1, 0, -1)  # EM_SETSEL
                                 return False  # Parar de enumerar
