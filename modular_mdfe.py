@@ -1350,8 +1350,8 @@ def main() -> None:
                     "a página correta de notas emitidas (CT-e).\n\n"
                     "Verifique:\n"
                     "• Se você está na página correta do sistema\n"
-                    "• Se a DT foi processada corretamente\n"
-                    "• Se há conexão com o servidor\n\n"
+                    "• Se a primeira aba do navegador está aberta no Invoisys em NOTAS EMITIDAS > CT-e\n"
+
                     "A automação será encerrada.",
                     title="ERRO: Página CT-e não Reconhecida"
                 )
@@ -1369,8 +1369,8 @@ def main() -> None:
                 "de notas emitidas (CT-e) não foi detectada.\n\n"
                 "Verifique:\n"
                 "• Se você está logado no sistema\n"
-                "• Se a DT é válida e existe no sistema\n"
-                "• Se há notas emitidas para esta DT\n\n"
+                "• Se a primeira aba do navegador está aberta no Invoisys em NOTAS EMITIDAS > CT-e\n"
+                
                 "A automação será encerrada.",
                 title="ERRO: Página de CT-e não Encontrada"
             )
