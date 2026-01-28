@@ -1,3 +1,8 @@
+# Modular MDF-E automation configuration template
+# Comments start with '#'. Sections (e.g. [MDFE]) group related typed fields.
+# Replace placeholder values with the exact text you want the automation to send.
+# The keys are referenced by the new modular script so updating this file changes every typed value.
+
 [GENERAL]
 dt_prompt_text = Digite o número do DT:
 
@@ -12,13 +17,13 @@ ncm_primary = 19041000
 ncm_secondary = 19059090
 ncm_tertiary = 20052000
 cep_origem = 13300340
-cep_destino = 13315000
+cep_destino = 09852080
 unidade_medida = 1
 carga_tipo = 05
 
 [MODAL_RODOVIARIO]
 rntrc = 45501846
-contratante_nome = PEPSICO ITU
+contratante_nome = PEPSICO
 contratante_cnpj = 02957518000224
 
 [INFORMACOES_ADICIONAIS]
@@ -26,10 +31,12 @@ contribuinte_cnpj = 04898488000177
 seguradora_nome = SEGUROS SURA SA
 seguradora_cnpj = 33065699000127
 numero_apolice = 5400035882
-frete_valor = 1314.27
+frete_valor = 1616.85
 frete_tipo = FRETE
 frete_identificador = FRETE
 numero_banco = 237
 agencia = 2372/8
 forma_pagamento = 1
 numero_parcelas = 1
+
+template_note = Se faltar alguma entrada use um comentário com # para anotar o que deve ir em seguida.

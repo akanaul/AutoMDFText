@@ -18,7 +18,7 @@ carga_tipo = 05
 
 [MODAL_RODOVIARIO]
 rntrc = 45501846
-contratante_nome = PEPSICO SOROCABA
+contratante_nome = PEPSICO
 contratante_cnpj = 02957518000739
 
 [INFORMACOES_ADICIONAIS]
