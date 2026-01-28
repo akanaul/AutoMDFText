@@ -462,7 +462,7 @@ def make_window_topmost(hwnd) -> None:
 
 
 def find_and_focus_pymsgbox() -> None:
-    """Encontra e foca a janela do PyMsgBox (usado por pyautogui) e o campo de entrada."""
+    """Encontra e torna a janela do PyMsgBox topmost, sem interferir no foco."""
     if os.name != "nt":
         return
     try:
@@ -480,19 +480,9 @@ def find_and_focus_pymsgbox() -> None:
                     user32.GetClassNameW(hwnd, class_buffer, 256)
                     # Procura por janelas do tipo dialog ou PyMsgBox
                     if "#32770" in class_buffer.value or "tk" in class_buffer.value.lower():
+                        # Apenas tornar topmost, SEM mexer no foco
                         make_window_topmost(hwnd)
-                        # Focar no campo de entrada dentro da janela
-                        try:
-                            # Procurar controle Edit (campo de texto) dentro da janela
-                            edit_hwnd = user32.FindWindowExW(hwnd, None, "Edit", None)
-                            if edit_hwnd:
-                                user32.SetFocus(edit_hwnd)
-                                time.sleep(0.30)
-                                # Selecionar todo o texto para facilitar digitação
-                                user32.SendMessageW(edit_hwnd, 0x00B1, 0, -1)  # EM_SETSEL
-                                return False  # Parar de enumerar
-                        except Exception:
-                            pass
+                        return False  # Parar de enumerar
             return True
         
         EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
@@ -502,76 +492,39 @@ def find_and_focus_pymsgbox() -> None:
 
 
 def focused_prompt(text: str = "", title: str = "", default: str = ""):
-    """Wrapper para pyautogui.prompt com foco garantido."""
+    """Wrapper para pyautogui.prompt."""
     pause_automation_timer()  # Pausar timer durante prompt
-    ensure_prompt_focus()
-    time.sleep(0.2)
-    
-    # Criar um timer para forçar topmost logo após a janela ser criada
-    def force_topmost():
-        time.sleep(0.3)
-        find_and_focus_pymsgbox()
-    
-    timer = threading.Timer(0.1, force_topmost)
-    timer.daemon = True
-    timer.start()
     
     try:
         result = pyautogui.prompt(text=text, title=title, default=default)
     finally:
-        timer.cancel()
         resume_automation_timer()  # Resumir timer após prompt
     
     return result
 
 
 def focused_alert(text: str = "", title: str = "", button: str = "OK"):
-    """Wrapper para pyautogui.alert com foco garantido."""
+    """Wrapper para pyautogui.alert."""
     pause_automation_timer()  # Pausar timer durante alert
-    ensure_prompt_focus()
-    time.sleep(0.2)
-    
-    # Criar um timer para forçar topmost logo após a janela ser criada
-    def force_topmost():
-        time.sleep(0.3)
-        find_and_focus_pymsgbox()
-    
-    timer = threading.Timer(0.1, force_topmost)
-    timer.daemon = True
-    timer.start()
     
     try:
         result = pyautogui.alert(text=text, title=title, button=button)
     finally:
-        timer.cancel()
         resume_automation_timer()  # Resumir timer após alert
     
     return result
 
 
 def focused_confirm(text: str = "", title: str = "", buttons=None):
-    """Wrapper para pyautogui.confirm com foco garantido."""
+    """Wrapper para pyautogui.confirm."""
     pause_automation_timer()  # Pausar timer durante confirm
-    ensure_prompt_focus()
-    time.sleep(0.2)
-    
-    # Criar um timer para forçar topmost logo após a janela ser criada
-    def force_topmost():
-        time.sleep(0.3)
-        find_and_focus_pymsgbox()
-    
-    timer = threading.Timer(0.1, force_topmost)
-    timer.daemon = True
-    timer.start()
     
     try:
         result = pyautogui.confirm(text=text, title=title, buttons=buttons)
     finally:
-        timer.cancel()
         resume_automation_timer()  # Resumir timer após confirm
     
     return result
-    return result_container[0]
 
 
 def ensure_caps_off() -> None:
@@ -1336,45 +1289,29 @@ def main() -> None:
         pyautogui.press("tab")
         time.sleep(0.2)
         time.sleep(3)
-        try:
-            conteudo_validacao = wait_for_form("notas emitidas: ct-e", tempo_maximo=4, intervalo=1, copy_attempts=2)
-            log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
-            
-            # Verificar se a página contém "NÚMERO CT-E"
-            conteudo_upper = conteudo_validacao.upper()
-            if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
-                log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
-                focused_alert(
-                    "ERRO: Página de CT-e não foi reconhecida!\n\n"
-                    "A automação foi interrompida porque não foi possível identificar\n"
-                    "a página correta de notas emitidas (CT-e).\n\n"
-                    "Verifique:\n"
-                    "• Se você está na página correta do sistema\n"
-                    "• Se a primeira aba do navegador está aberta no Invoisys em NOTAS EMITIDAS > CT-e\n"
-
-                    "A automação será encerrada.",
-                    title="ERRO: Página CT-e não Reconhecida"
-                )
-                raise SystemExit(1)
-            
-            log("'NÚMERO CT-E' confirmado. Página válida para continuar.")
-        except SystemExit as e:
-            # Re-lançar SystemExit para interromper automação
-            if e.code == 1:
-                raise
-            log("Aviso: Página de CT-e não foi encontrada durante validação.")
+        
+        # Tentar validar a página
+        conteudo_validacao = wait_for_form("notas emitidas: ct-e", tempo_maximo=10, intervalo=1, copy_attempts=2)
+        log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
+        
+        # Verificar se a página contém "NÚMERO CT-E"
+        conteudo_upper = conteudo_validacao.upper()
+        if "NÚMERO CT-E" not in conteudo_upper and "NUMERO CT-E" not in conteudo_upper:
+            log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
             focused_alert(
-                "ERRO: Página de CT-e não foi encontrada!\n\n"
-                "A automação foi interrompida porque a página esperada\n"
-                "de notas emitidas (CT-e) não foi detectada.\n\n"
+                "ERRO: Página de CT-e não foi reconhecida!\n\n"
+                "A automação foi interrompida porque não foi possível identificar\n"
+                "a página correta de notas emitidas (CT-e).\n\n"
                 "Verifique:\n"
-                "• Se você está logado no sistema\n"
+                "• Se você está na página correta do sistema\n"
                 "• Se a primeira aba do navegador está aberta no Invoisys em NOTAS EMITIDAS > CT-e\n"
-                
+                "\n"
                 "A automação será encerrada.",
-                title="ERRO: Página de CT-e não Encontrada"
+                title="ERRO: Página CT-e não Reconhecida"
             )
             raise SystemExit(1)
+        
+        log("'NÚMERO CT-E' confirmado. Página válida para continuar.")
 
         # Prompt para DT ANTES de buscar o campo
         prompt_text = profile.get_value("general", "dt_prompt_text")
