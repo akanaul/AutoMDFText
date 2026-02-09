@@ -2,7 +2,8 @@
 import ctypes
 import os
 import re
-import threading
+import tkinter as tk
+from tkinter import messagebox
 import time
 from pathlib import Path
 
@@ -17,7 +18,6 @@ CONFIG_DIR = BASE_DIR / "scripts"
 LOG_DIR = BASE_DIR / "logs"
 CONFIG_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
-DEFAULT_PROFILE = "template_config.txt"
 # Log por sessão (timestamp) para facilitar debug
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
@@ -44,7 +44,10 @@ def log(msg: str) -> None:
 
 
 def start_automation_session(selected: str, profile_path: Path) -> float:
-    """Inicia um novo log e reseta timers após a seleção do script."""
+    """Cria um novo log de sessao e reinicia os contadores de tempo.
+
+    Retorna o instante monotonic para calculo do tempo total.
+    """
     global LOG_FILE, SESSION_TS, _automation_start_time, _automation_time_paused
 
     SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -114,48 +117,6 @@ def format_duration(seconds: float) -> str:
         return f"{secs}s"
 
 
-# ============================================================================
-# FUNÇÕES HELPER PARA CONSOLIDAR AÇÕES COM LOGS
-# ============================================================================
-
-def find_and_fill(search_text: str, fill_value: str, log_msg: str = "", use_enter: bool = True) -> None:
-    """Localiza campo, preenche com valor e registra. Consolida log + ação."""
-    msg = log_msg or f"Preenchendo {search_text}: {fill_value}"
-    log(msg)
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.3)
-    smart_write(search_text, interval=0.10)
-    time.sleep(0.2)
-    pyautogui.press("esc")
-    time.sleep(0.3)
-    pyautogui.press("tab")
-    time.sleep(0.2)
-    smart_write(fill_value, interval=0.10)
-    if use_enter:
-        pyautogui.press("enter")
-        time.sleep(0.3)
-
-
-def find_text(search_text: str, log_msg: str = "") -> None:
-    """Localiza texto na página com Ctrl+F."""
-    msg = log_msg or f"Procurando por '{search_text}'"
-    log(msg)
-    pyautogui.hotkey("ctrl", "f")
-    time.sleep(0.3)
-    smart_write(search_text, interval=0.10)
-    time.sleep(0.2)
-    pyautogui.press("esc")
-    time.sleep(0.3)
-
-
-def fill_field(value: str, log_msg: str = "", interval: float = 0.10) -> None:
-    """Preenche campo atual com valor."""
-    if log_msg:
-        log(log_msg)
-    smart_write(value, interval=interval)
-    time.sleep(0.2)
-
-
 def skip_tabs(count: int, log_msg: str = "") -> None:
     """Pula N campos (tabs) com log opcional."""
     if log_msg:
@@ -172,7 +133,10 @@ def paste_text(
     delay: float = 0.15,
     restore_clipboard: bool = True,
 ) -> None:
-    """Cola texto via clipboard e valida o conteúdo colado quando possível."""
+    """Cola texto via clipboard e valida o conteúdo quando possível.
+
+    Quando verify=True, tenta ler o campo com Ctrl+A/C e compara com o valor.
+    """
     try:
         previous = pyperclip.paste()
     except Exception:
@@ -224,7 +188,10 @@ def smart_write(
     min_paste_len: int = 4,
     verify: bool = True,
 ) -> None:
-    """Escolhe entre digitar com intervalo e colar texto para entradas maiores."""
+    """Escolhe entre digitar e colar, com verificação opcional.
+
+    Desativa a verificacao para CPF/CNPJ (11/14 digitos) por formatacao automatica.
+    """
     if value is None:
         return
     text = str(value)
@@ -499,95 +466,6 @@ def choose_profile(interactive_list: list[str]) -> str:
     return selected_profile
 
 
-def ensure_prompt_focus() -> None:
-    """Garante que os prompts do PyAutoGUI ganhem foco ao aparecer."""
-    if os.name != "nt":
-        return
-    try:
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        
-        # Permite que a próxima janela possa ganhar foco
-        user32.AllowSetForegroundWindow(-1)  # ASFW_ANY
-        
-        # Obtém o ID do thread e processo atual
-        current_thread = kernel32.GetCurrentThreadId()
-        foreground_thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(), None)
-        
-        # Anexa o input do thread atual ao thread em foreground
-        if foreground_thread != current_thread:
-            user32.AttachThreadInput(foreground_thread, current_thread, True)
-            
-        # Força mudança de foco
-        user32.BringWindowToTop(user32.GetForegroundWindow())
-        user32.SetFocus(user32.GetForegroundWindow())
-        
-        # Desanexa os threads
-        if foreground_thread != current_thread:
-            user32.AttachThreadInput(foreground_thread, current_thread, False)
-            
-        time.sleep(0.30)
-    except Exception:
-        pass
-
-
-def make_window_topmost(hwnd) -> None:
-    """Define uma janela como topmost (sempre no topo)."""
-    if os.name != "nt" or not hwnd:
-        return
-    try:
-        user32 = ctypes.windll.user32
-        # Constantes do Windows
-        HWND_TOPMOST = -1
-        SWP_NOMOVE = 0x0002
-        SWP_NOSIZE = 0x0001
-        SWP_SHOWWINDOW = 0x0040
-        
-        # Define a janela como topmost
-        user32.SetWindowPos(
-            hwnd,
-            HWND_TOPMOST,
-            0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW
-        )
-        # Garante que está em primeiro plano
-        user32.SetForegroundWindow(hwnd)
-        user32.SetActiveWindow(hwnd)
-        user32.BringWindowToTop(hwnd)
-    except Exception:
-        pass
-
-
-def find_and_focus_pymsgbox() -> None:
-    """Encontra e torna a janela do PyMsgBox topmost, sem interferir no foco."""
-    if os.name != "nt":
-        return
-    try:
-        user32 = ctypes.windll.user32
-        
-        # Callback para enumerar janelas
-        def enum_callback(hwnd, lParam):
-            if user32.IsWindowVisible(hwnd):
-                length = user32.GetWindowTextLengthW(hwnd)
-                if length > 0:
-                    buffer = ctypes.create_unicode_buffer(length + 1)
-                    user32.GetWindowTextW(hwnd, buffer, length + 1)
-                    # PyAutoGUI usa PyMsgBox que cria janelas com classe específica
-                    class_buffer = ctypes.create_unicode_buffer(256)
-                    user32.GetClassNameW(hwnd, class_buffer, 256)
-                    # Procura por janelas do tipo dialog ou PyMsgBox
-                    if "#32770" in class_buffer.value or "tk" in class_buffer.value.lower():
-                        # Apenas tornar topmost, SEM mexer no foco
-                        make_window_topmost(hwnd)
-                        return False  # Parar de enumerar
-            return True
-        
-        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-        user32.EnumWindows(EnumWindowsProc(enum_callback), 0)
-    except Exception:
-        pass
-
-
 def focused_prompt(text: str = "", title: str = "", default: str = ""):
     """Wrapper para pyautogui.prompt."""
     pause_automation_timer()  # Pausar timer durante prompt
@@ -612,15 +490,137 @@ def focused_alert(text: str = "", title: str = "", button: str = "OK"):
     return result
 
 
-def focused_confirm(text: str = "", title: str = "", buttons=None):
-    """Wrapper para pyautogui.confirm."""
-    pause_automation_timer()  # Pausar timer durante confirm
-    
+def prompt_batch_info(ncm_options: list[str]) -> dict[str, str] | None:
+    """Exibe um prompt único para CT-e, NF1, NF2 e NCM e retorna os valores.
+
+    Retorna None se o usuario cancelar.
+    """
+    pause_automation_timer()
+    root = tk.Tk()
+    root.withdraw()
+    result: dict[str, str] = {}
+
     try:
-        result = pyautogui.confirm(text=text, title=title, buttons=buttons)
+        dialog = tk.Toplevel(root)
+        dialog.title("Dados para Averbação")
+        dialog.attributes("-topmost", True)
+        dialog.resizable(False, False)
+        dialog.geometry("600x560")
+
+        font_label = ("Segoe UI", 11)
+        font_entry = ("Segoe UI", 11)
+        font_radio = ("Segoe UI", 11)
+        font_button = ("Segoe UI", 11)
+
+        cte_var = tk.StringVar()
+        nf1_var = tk.StringVar()
+        nf2_var = tk.StringVar()
+        ncm_var = tk.StringVar()
+        ncm_other_var = tk.StringVar()
+
+        frame = tk.Frame(dialog, padx=16, pady=14)
+        frame.pack(fill="both", expand=True)
+
+        tk.Label(frame, text="Número do CT-e (obrigatório):", font=font_label).grid(row=0, column=0, sticky="w")
+        cte_entry = tk.Entry(frame, textvariable=cte_var, width=34, font=font_entry)
+        cte_entry.grid(row=1, column=0, sticky="ew", pady=(2, 8))
+
+        tk.Label(frame, text="NF1 (opcional):", font=font_label).grid(row=2, column=0, sticky="w")
+        tk.Entry(frame, textvariable=nf1_var, width=34, font=font_entry).grid(row=3, column=0, sticky="ew", pady=(2, 8))
+
+        tk.Label(frame, text="NF2 (opcional):", font=font_label).grid(row=4, column=0, sticky="w")
+        tk.Entry(frame, textvariable=nf2_var, width=34, font=font_entry).grid(row=5, column=0, sticky="ew", pady=(2, 10))
+
+        tk.Label(frame, text="Selecione o NCM:", font=font_label).grid(row=6, column=0, sticky="w")
+        ncm_frame = tk.Frame(frame)
+        ncm_frame.grid(row=7, column=0, sticky="w", pady=(2, 6))
+
+        ncm_values: list[str] = []
+
+        def select_radio_value(value: str) -> None:
+            ncm_var.set(value)
+
+        def on_radio_key(event, value: str) -> None:
+            select_radio_value(value)
+        for idx, option in enumerate(ncm_options):
+            rb = tk.Radiobutton(ncm_frame, text=option, value=option, variable=ncm_var, takefocus=True, font=font_radio)
+            rb.grid(row=idx, column=0, sticky="w")
+            rb.bind("<Return>", lambda e, v=option: on_radio_key(e, v))
+            rb.bind("<space>", lambda e, v=option: on_radio_key(e, v))
+            ncm_values.append(option)
+
+        rb_other = tk.Radiobutton(ncm_frame, text="Outro:", value="__outro__", variable=ncm_var, takefocus=True, font=font_radio)
+        rb_other.grid(row=len(ncm_options), column=0, sticky="w")
+        rb_other.bind("<Return>", lambda e, v="__outro__": on_radio_key(e, v))
+        rb_other.bind("<space>", lambda e, v="__outro__": on_radio_key(e, v))
+        ncm_values.append("__outro__")
+        tk.Entry(ncm_frame, textvariable=ncm_other_var, width=22, takefocus=True, font=font_entry).grid(
+            row=len(ncm_options), column=1, sticky="w", padx=(6, 0)
+        )
+
+        button_frame = tk.Frame(frame)
+        button_frame.grid(row=8, column=0, sticky="e", pady=(8, 0))
+
+        def on_ok() -> None:
+            ncm_choice = ncm_var.get().strip()
+            if ncm_choice == "__outro__":
+                ncm_choice = ncm_other_var.get().strip()
+
+            if not ncm_choice:
+                messagebox.showwarning("NCM obrigatório", "Selecione um NCM ou informe um código em \"Outro\".")
+                return
+
+            result["cte"] = cte_var.get().strip()
+            result["nf1"] = nf1_var.get().strip()
+            result["nf2"] = nf2_var.get().strip()
+            result["ncm"] = ncm_choice
+            dialog.destroy()
+
+        def on_cancel() -> None:
+            result.clear()
+            dialog.destroy()
+
+        ok_button = tk.Button(button_frame, text="OK", command=on_ok, width=10, font=font_button, takefocus=True)
+        ok_button.pack(side="right", padx=(6, 0))
+        cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel, width=10, font=font_button, takefocus=True)
+        cancel_button.pack(side="right")
+        ok_button.bind("<Return>", lambda e: ok_button.invoke())
+        cancel_button.bind("<Return>", lambda e: cancel_button.invoke())
+
+        def select_focused_radio(event=None) -> None:
+            widget = dialog.focus_get()
+            if isinstance(widget, tk.Radiobutton):
+                ncm_var.set(widget.cget("value"))
+
+        def move_radio(delta: int) -> None:
+            current = ncm_var.get()
+            if current not in ncm_values:
+                if ncm_values:
+                    select_radio_value(ncm_values[0])
+                return
+            idx = ncm_values.index(current)
+            next_idx = max(0, min(len(ncm_values) - 1, idx + delta))
+            select_radio_value(ncm_values[next_idx])
+
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        dialog.bind("<Return>", select_focused_radio)
+        dialog.bind("<space>", select_focused_radio)
+        dialog.bind("<Up>", lambda e: move_radio(-1))
+        dialog.bind("<Down>", lambda e: move_radio(1))
+        dialog.grab_set()
+        if ncm_options:
+            ncm_var.set(ncm_options[0])
+        dialog.after(150, lambda: dialog.lift())
+        dialog.after(200, lambda: dialog.attributes("-topmost", True))
+        dialog.after(250, lambda: dialog.focus_force())
+        dialog.after(300, lambda: cte_entry.focus_set())
+        root.wait_window(dialog)
     finally:
-        resume_automation_timer()  # Resumir timer após confirm
-    
+        root.destroy()
+        resume_automation_timer()
+
+    if not result:
+        return None
     return result
 
 
@@ -751,8 +751,39 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
     raise SystemExit(1)
 
 
+def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
+    """Copia o conteúdo da página e confirma a presença do CT-e informado."""
+    if not numero_cte:
+        return
+
+    inicio = time.monotonic()
+    while time.monotonic() - inicio < tempo_maximo:
+        try:
+            pyautogui.press("tab")
+            time.sleep(0.15)
+            pyautogui.hotkey("ctrl", "a")
+            time.sleep(0.15)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.2)
+            conteudo = pyperclip.paste() or ""
+            if str(numero_cte) in conteudo:
+                log(f"CT-e {numero_cte} encontrado na página.")
+                return
+        except Exception:
+            pass
+
+        time.sleep(intervalo)
+
+    focused_alert(
+        "O número do CT-e informado não foi encontrado na página.\n\n"
+        "Verifique se o número digitado é o mesmo que aparece na tela e tente novamente.",
+        title="CT-e não encontrado"
+    )
+    raise SystemExit(1)
+
+
 def navigate_to_mdfe() -> None:
-    """Navega para o formulário MDF-e - cópia exata do script legado"""
+    """Navega para o formulario MDF-e seguindo o fluxo legado ajustado."""
     # IR PARA 3ª PAGINA - MDF
     time.sleep(1)
     pyautogui.hotkey("ctrl", "3")
@@ -763,7 +794,7 @@ def navigate_to_mdfe() -> None:
     time.sleep(0.3)
     log("Procurando por 'EMITIR NOTA'")
     smart_write("EMITIR NOTA", interval=0.10)
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
@@ -773,54 +804,18 @@ def navigate_to_mdfe() -> None:
     time.sleep(0.3)
     log("Procurando por 'MDF-E'")
     smart_write("MDF-E", interval=0.10)
-    time.sleep(0.2)
+    time.sleep(0.3)
     pyautogui.press("esc")
     time.sleep(0.3)
     pyautogui.press("enter")
     time.sleep(0.7)
 
 
-def select_ncm(profile: ConfigProfile) -> str:
-    """Exibe prompt para seleção de NCM no início da automação.
-    Retorna o código NCM selecionado."""
-    ncm_primary = profile.get_value("mdfe", "ncm_primary")
-    ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
-    ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary")
-    if not (ncm_primary and ncm_secondary and ncm_tertiary):
-        log("Perfil sem códigos NCM obrigatórios (mdfe.ncm_primary/secondary/tertiary)")
-        focused_alert(
-            "O perfil está faltando códigos NCM obrigatórios:\n"
-            "mdfe.ncm_primary, mdfe.ncm_secondary, mdfe.ncm_tertiary",
-            title="Perfil inválido"
-        )
-        raise SystemExit(1)
-    
-    opcao = focused_confirm(
-        text='Selecione o código NCM ou escolha "Outro código" para digitar manualmente:',
-        title='Escolha de NCM',
-        buttons=[ncm_primary, ncm_secondary, ncm_tertiary, 'Outro código', 'Cancelar']
-    )
-
-    if opcao == 'Cancelar':
-        focused_alert('Nenhum código NCM selecionado. O script foi pausado.')
-        pyautogui.FAILSAFE = True
-        raise SystemExit(1)
-    elif opcao == 'Outro código':
-        codigo = focused_prompt('Digite o código NCM:')
-        if not codigo:
-            focused_alert('Nenhum código NCM digitado. O script foi pausado.')
-            pyautogui.FAILSAFE = True
-            raise SystemExit(1)
-    else:
-        codigo = opcao
-    
-    log(f"Código NCM selecionado: {codigo}")
-    return codigo
-
-
 def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
-    """Preenche dados do MDF-e - cópia exata do script legado
-    Recebe o código NCM já selecionado como parâmetro."""
+    """Preenche o formulario MDF-e usando valores do perfil e NCM selecionado.
+
+    Espera que o formulario MDF-e esteja aberto e com foco.
+    """
     time.sleep(1)
     log("Iniciando preenchimento MDF-e: PRESTADOR DE SERVIÇO, EMITENTE, UF, MUNICÍPIO")
     
@@ -964,7 +959,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
-    """Preenche dados do Modal Rodoviário"""
+    """Preenche os dados do Modal Rodoviario conforme o perfil ativo."""
     log("Iniciando preenchimento Modal Rodoviário")
     time.sleep(1.5)
     
@@ -1015,7 +1010,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
-    """Preenche Informações Adicionais (Seguradora, Frete, Banco, etc)"""
+    """Preenche Informacoes Adicionais (seguradora, frete, banco e parcelas)."""
     log("Iniciando preenchimento Informações Adicionais")
 
     def write_additional(value: str, interval: float = 0.10, **_kwargs) -> None:
@@ -1202,13 +1197,13 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(1.0)
     
-    log(f"Info Adicionais: Seguradora={seguradora}, Frete={frete_val}, Banco={numero_banco}, Parcelas={numero_parcelas}")
+    log(f"Informações Adicionais: Seguradora={seguradora}, Frete={frete_val}, Banco={numero_banco}, Parcelas={numero_parcelas}")
 
 
 def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str = "") -> None:
-    """Executa a averbação e preenche DT/CT-e no final.
-    - Usa CT-e capturado no início quando disponível, sem voltar à primeira página
-    - Em fallback, captura CT-e na INVOISYS sem atrelar ou sobrescrever o DT
+    """Executa a averbacao, extrai o numero e preenche a area de contribuinte.
+
+    Assume que a aba de averbacao e a aba do sistema estao abertas.
     """
     def write_averbacao(value: str, interval: float = 0.10) -> None:
         smart_write(value, interval=interval, verify=False)
@@ -1320,8 +1315,9 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
 
 
 def main() -> None:
+    """Fluxo principal da automacao MDF-e."""
     global _automation_start_time, _automation_time_paused
-    
+
     try:
         # Iniciar contadores de tempo após seleção do script
         real_start_time = 0.0
@@ -1453,22 +1449,49 @@ def main() -> None:
         pyautogui.press("enter")
         time.sleep(0.5)
 
-        # SELEÇÃO DE NCM (APÓS DT E ANTES DE CTE) - NOVO FLUXO
-        log("Exibindo prompt para seleção de NCM")
-        codigo_ncm = select_ncm(profile)
-        log(f"NCM selecionado e armazenado: {codigo_ncm}")
-        ui_print(f"NCM selecionado: {codigo_ncm}", style="success")
-        time.sleep(0.5)
+        # Aviso inicial para baixar o CT-e, antes do prompt unificado
+        log("Exibindo aviso para baixar o CT-e antes de seguir")
+        focused_alert(
+            text=(
+                "Antes de prosseguir, faça o download do XML do CT-e correspondente \n"
+                "à DT e mantenha-o salvo. Em seguida clique em OK para continuar."
+            ),
+            title="Aviso: Baixe o CT-e"
+        )
 
-        # PROMPTS PARA NFs (NF1/NF2) E CONCATENAÇÃO (opcionais)
-        log("Exibindo prompt para NF1")
-        nf1 = focused_prompt(text="Informe a NF1 (opcional):", title="NF1") or ""
-        log(f"NF1 informada: '{nf1}'")
-        
-        log("Exibindo prompt para NF2")
-        nf2 = focused_prompt(text="Informe a NF2 (opcional):", title="NF2") or ""
-        log(f"NF2 informada: '{nf2}'")
-        
+        ncm_primary = profile.get_value("mdfe", "ncm_primary")
+        ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
+        ncm_tertiary = profile.get_value("mdfe", "ncm_tertiary")
+        if not (ncm_primary and ncm_secondary and ncm_tertiary):
+            log("Perfil sem códigos NCM obrigatórios (mdfe.ncm_primary/secondary/tertiary)")
+            focused_alert(
+                "O perfil está faltando códigos NCM obrigatórios:\n"
+                "mdfe.ncm_primary, mdfe.ncm_secondary, mdfe.ncm_tertiary",
+                title="Perfil inválido"
+            )
+            raise SystemExit(1)
+
+        log("Exibindo prompt unificado para CT-e, NFs e NCM")
+        batch = prompt_batch_info([ncm_primary, ncm_secondary, ncm_tertiary])
+        if not batch:
+            focused_alert("Nenhuma informação foi informada. O script foi pausado.")
+            raise SystemExit(1)
+
+        numero_cte = batch.get("cte", "")
+        nf1 = batch.get("nf1", "")
+        nf2 = batch.get("nf2", "")
+        codigo_ncm = batch.get("ncm", "")
+
+        log(f"CT-e informado: '{numero_cte}'")
+        if not numero_cte:
+            log("Nenhum número de CT-e informado; encerrando automação conforme solicitado")
+            focused_alert(
+                "ERRO: Nenhum número de CT-e foi informado.\n\n"
+                "A automação será encerrada.",
+                title="CT-e obrigatório"
+            )
+            raise SystemExit(1)
+
         # Concatenar apenas se ambas informadas; caso contrário usar a que foi preenchida
         if nf1 and nf2:
             nf_concat = f"{nf1}/{nf2}"
@@ -1479,33 +1502,15 @@ def main() -> None:
         else:
             nf_concat = ""
         log(f"NF coletadas: '{nf1}' e '{nf2}' => '{nf_concat}'")
-        time.sleep(0.3)
-
-        # Aviso inicial para baixar o CT-e, seguido do prompt do número
-        log("Exibindo aviso para baixar o CT-e antes de seguir")
-        focused_alert(
-            text=(
-                "Antes de prosseguir, faça o download do XML do CT-e correspondente \n"
-                "à DT e mantenha-o salvo. Em seguida clique em OK para continuar."
-            ),
-            title="Aviso: Baixe o CT-e"
-        )
-        numero_cte = focused_prompt(
-            text="Informe o número do CT-e (XML já baixado):",
-            title="Número CT-e"
-        ) or ""
-        log(f"CT-e informado: '{numero_cte}'")
-        if not numero_cte:
-            log("Nenhum número de CT-e informado; encerrando automação conforme solicitado")
-            focused_alert(
-                "ERRO: Nenhum número de CT-e foi informado.\n\n"
-                "A automação será encerrada.",
-                title="CT-e obrigatório"
-            )
-            raise SystemExit(1)
+        log(f"NCM selecionado e armazenado: {codigo_ncm}")
+        ui_print(f"NCM selecionado: {codigo_ncm}", style="success")
+        time.sleep(0.5)
         pyautogui.press("esc")
         time.sleep(0.15)
         ensure_caps_off()
+
+        # Verificar se o CT-e informado aparece na página antes de ir para a aba 3
+        verify_cte_on_page(numero_cte)
         
         ui_print("Preenchendo formulário MDF-e...", style="step")
         
@@ -1513,7 +1518,7 @@ def main() -> None:
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
         
-        # Preencher formulário (passando codigo_ncm já selecionado)
+        # Preencher formulário (passando código NCM já selecionado)
         log("Iniciando preenchimento dos dados MDF-e")
         fill_mdfe(profile, codigo_ncm)
         log("Dados MDF-e preenchidos com sucesso")
