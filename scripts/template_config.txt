@@ -23,7 +23,7 @@ carga_tipo = 05
 
 [MODAL_RODOVIARIO]
 rntrc = 45501846
-contratante_nome = PEPSICO ITU
+contratante_nome = PEPSICO
 contratante_cnpj = 02957518000224
 
 [INFORMACOES_ADICIONAIS]
