@@ -1,4 +1,10 @@
-﻿import argparse
+﻿"""Automacao MDF-e com selecao de perfil, prompts gui e preenchimento via teclado.
+
+Inclui failsafe (F8), pausa (F9) e validacoes de tela para reduzir erros de
+preenchimento em formularios do navegador.
+"""
+
+import argparse
 import ctypes
 import os
 import re
@@ -18,7 +24,7 @@ CONFIG_DIR = BASE_DIR / "scripts"
 LOG_DIR = BASE_DIR / "logs"
 CONFIG_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
-# Log por sessão (timestamp) para facilitar debug
+# Log por sessao (timestamp) para facilitar debug
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
@@ -77,7 +83,10 @@ def start_automation_session(selected: str, profile_path: Path) -> float:
 
 
 def start_failsafe_f8() -> None:
-    """Inicia um listener global para encerrar a automacao ao pressionar F8."""
+    """Inicia listener global para F8 (encerrar) e F9 (pausar).
+
+    Em Windows, ignora eventos injetados para aceitar apenas teclado fisico.
+    """
     global _failsafe_listener
     if _failsafe_listener is not None:
         return
@@ -189,7 +198,10 @@ def request_pause() -> None:
 
 
 def show_pause_dialog() -> str:
-    """Exibe um dialogo topmost de pausa com Retomar ou Cancelar."""
+    """Exibe um dialogo topmost de pausa sem roubar foco.
+
+    Retorna "resume" para continuar ou "cancel" para encerrar a automacao.
+    """
     root = tk.Tk()
     root.withdraw()
 
@@ -282,7 +294,7 @@ def show_pause_dialog() -> str:
 
 
 def check_pause() -> None:
-    """Pausa a automacao em um ponto seguro se solicitado."""
+    """Pausa em ponto seguro e valida o ultimo campo digitado antes de bloquear."""
     global _pause_requested, _pause_active
     if not _pause_requested or _pause_active:
         return
@@ -307,11 +319,12 @@ def check_pause() -> None:
 
 
 def pause_point() -> None:
-    """Ponto seguro para pausar entre etapas."""
+    """Ponto seguro para pausar entre etapas (fora de sequencias tab/enter)."""
     check_pause()
 
 
 def _verify_last_write_before_pause() -> None:
+    """Revalida o ultimo smart_write para evitar campo vazio antes da pausa."""
     global _last_write_value, _last_write_verify
     if not _last_write_verify or not _last_write_value:
         return
@@ -329,6 +342,7 @@ def _verify_last_write_before_pause() -> None:
     finally:
         _last_write_value = None
         _last_write_verify = False
+
 
 def format_duration(seconds: float) -> str:
     """Formata duracao em segundos para o formato MM:SS ou apenas SS."""
@@ -707,7 +721,7 @@ def focused_prompt(text: str = "", title: str = "", default: str = ""):
 
 
 def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
-    """Prompt dedicado para DT com bloqueio e aviso ao perder foco."""
+    """Prompt dedicado para DT com bloqueio e alerta se a janela perder foco."""
     pause_automation_timer()
     root = tk.Tk()
     root.withdraw()
@@ -931,7 +945,7 @@ def focused_confirm(text: str = "", title: str = "", buttons: list[str] | None =
 
 
 def prompt_batch_info(ncm_options: list[str]) -> dict[str, str] | None:
-    """Exibe um prompt único para CT-e, NF1, NF2 e NCM e retorna os valores.
+    """Prompt unico para CT-e, NF1/NF2 e NCM com validacoes basicas.
 
     Retorna None se o usuario cancelar.
     """
@@ -1241,6 +1255,7 @@ def focus_browser_if_needed() -> None:
 
 
 def upload_latest_xml() -> None:
+    """Seleciona o arquivo mais recente em Downloads e confirma o upload."""
     time.sleep(1)
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
@@ -1256,8 +1271,10 @@ def upload_latest_xml() -> None:
 
 
 def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 1.0, copy_attempts: int = 2) -> str:
-    """Aguarda o formulário abrir detectando texto específico (lógica do legado).
-    Retorna o conteúdo do clipboard capturado quando o formulário é encontrado."""
+    """Aguarda o formulario abrir detectando texto via clipboard.
+
+    Retorna o conteudo copiado quando o alvo e encontrado.
+    """
     short_sleep = 0.12
 
     inicio = time.monotonic()
@@ -1898,6 +1915,7 @@ def main() -> None:
         # Impedir execução duplicada
         ensure_single_instance()
         
+        # Selecionar perfil de configuracao
         parser = argparse.ArgumentParser()
         parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
         args = parser.parse_args()
@@ -1926,6 +1944,7 @@ def main() -> None:
 
         ui_print("Iniciando preenchimento...", style="step")
         
+        # Preparar navegador e validar pagina inicial
         # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
         log("Focando navegador (evitando minimizar)")
         focus_browser_if_needed()
@@ -2015,6 +2034,7 @@ def main() -> None:
 
         pause_point()
 
+        # Coleta de informacoes obrigatorias
         # Prompt para DT ANTES de buscar o campo
         prompt_text = profile.get_value("general", "dt_prompt_text")
         if not prompt_text:
@@ -2119,6 +2139,7 @@ def main() -> None:
         
         ui_print("Preenchendo formulário MDF-e...", style="step")
         
+        # Preencher formularios principais
         # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
@@ -2149,6 +2170,7 @@ def main() -> None:
         log("Averbação processada com sucesso")
         pause_point()
         
+        # Encerramento com resumo
         # Ao finalizar com sucesso, calcular tempos
         real_end_time = time.monotonic()
         automation_end_time = time.monotonic()
