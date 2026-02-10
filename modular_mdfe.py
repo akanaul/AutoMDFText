@@ -848,22 +848,103 @@ def _get_foreground_class() -> str:
     return buffer.value or ""
 
 
+def _get_window_process_name(hwnd: int) -> str:
+    """Retorna o nome do processo dono da janela (ex: msedge.exe)."""
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    psapi = ctypes.windll.psapi
+
+    pid = ctypes.c_uint32()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if not pid.value:
+        return ""
+
+    process = kernel32.OpenProcess(0x0410, False, pid.value)
+    if not process:
+        return ""
+    try:
+        buffer = ctypes.create_unicode_buffer(260)
+        if psapi.GetModuleBaseNameW(process, None, buffer, 260) == 0:
+            return ""
+        return buffer.value.lower()
+    finally:
+        kernel32.CloseHandle(process)
+
+
+def _is_cloaked_window(hwnd: int) -> bool:
+    """Retorna True se a janela estiver cloaked (UWP em background)."""
+    try:
+        dwmapi = ctypes.windll.dwmapi
+    except Exception:
+        return False
+
+    DWMWA_CLOAKED = 14
+    cloaked = ctypes.c_int(0)
+    if dwmapi.DwmGetWindowAttribute(
+        hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked)
+    ) != 0:
+        return False
+    return cloaked.value != 0
+
+
+def _is_top_level_app_window(hwnd: int) -> bool:
+    """Filtra janelas utilitarias/owned que nao representam uma janela real."""
+    user32 = ctypes.windll.user32
+    GW_OWNER = 4
+    GWL_EXSTYLE = -20
+    WS_EX_TOOLWINDOW = 0x00000080
+
+    if user32.GetWindow(hwnd, GW_OWNER):
+        return False
+    ex_style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    if ex_style & WS_EX_TOOLWINDOW:
+        return False
+    return True
+
+
+def _is_standard_window(hwnd: int) -> bool:
+    """Valida se a janela tem estilo tipico de app (com titulo/borda)."""
+    user32 = ctypes.windll.user32
+    GWL_STYLE = -16
+    WS_OVERLAPPEDWINDOW = 0x00CF0000
+
+    style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+    return (style & WS_OVERLAPPEDWINDOW) == WS_OVERLAPPEDWINDOW
+
+
+def _is_browser_window(title: str, cls: str, process_name: str = "") -> bool:
+    """Identifica se a janela pertence ao navegador pela combinacao de titulo/classe/processo."""
+    title_hits = ("chrome", "edge", "navegador", "invoisys", "google chrome", "microsoft edge")
+    process_hits = ("msedge.exe", "chrome.exe")
+    # ApplicationFrameWindow aparece em varios apps UWP; evite class-only match.
+    class_hits = ("chrome_widgetwin_1",)
+
+    if process_name in process_hits:
+        return True
+    return any(k in title for k in title_hits) or (cls in class_hits)
+
+
 def _find_browser_windows() -> list[int]:
     """Encontra janelas de navegador visiveis (Chrome/Edge) pela classe/titulo."""
     if os.name != "nt":
         return []
 
     user32 = ctypes.windll.user32
-    title_hits = ("chrome", "edge", "navegador", "invoisys", "google chrome", "microsoft edge")
-    class_hits = ("chrome_widgetwin_1", "applicationframewindow", "windows.ui.core.corewindow")
-
     windows: list[int] = []
 
     @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
     def enum_proc(hwnd, _lparam):
         if not user32.IsWindowVisible(hwnd):
             return True
+        if _is_cloaked_window(hwnd):
+            return True
+        if not _is_top_level_app_window(hwnd):
+            return True
+        if not _is_standard_window(hwnd):
+            return True
         length = user32.GetWindowTextLengthW(hwnd)
+        if length == 0:
+            return True
         buffer = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(hwnd, buffer, length + 1)
         title = (buffer.value or "").lower()
@@ -871,7 +952,8 @@ def _find_browser_windows() -> list[int]:
         user32.GetClassNameW(hwnd, class_buffer, 256)
         cls = (class_buffer.value or "").lower()
 
-        if any(k in title for k in title_hits) or (cls in class_hits):
+        process_name = _get_window_process_name(int(hwnd))
+        if _is_browser_window(title, cls, process_name):
             windows.append(int(hwnd))
         return True
 
@@ -894,10 +976,8 @@ def focus_browser_if_needed() -> None:
 
     title = _get_foreground_title().lower()
     cls = _get_foreground_class().lower()
-    title_hits = ("chrome", "edge", "navegador", "invoisys", "google chrome", "microsoft edge")
-    class_hits = ("chrome_widgetwin_1", "applicationframewindow", "windows.ui.core.corewindow")
-
-    if any(k in title for k in title_hits) or (cls in class_hits):
+    process_name = _get_window_process_name(ctypes.windll.user32.GetForegroundWindow())
+    if _is_browser_window(title, cls, process_name):
         log("Navegador já em foco; Win+1 ignorado para evitar minimizar.")
         return
 
@@ -908,7 +988,8 @@ def focus_browser_if_needed() -> None:
     # Pós-checagem: se ainda não estiver em foco, tentar fallback suave
     title2 = _get_foreground_title().lower()
     cls2 = _get_foreground_class().lower()
-    if any(k in title2 for k in title_hits) or (cls2 in class_hits):
+    process_name2 = _get_window_process_name(ctypes.windll.user32.GetForegroundWindow())
+    if _is_browser_window(title2, cls2, process_name2):
         log("Navegador em foco após Win+1.")
         return
     log("Win+1 não focou o navegador; evitando minimizar e mantendo estado.")

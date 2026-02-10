@@ -2,19 +2,33 @@
 setlocal enabledelayedexpansion
 title AutoMDFText - MDF-e Toolkit
 
-set "PYTHON=python"
-for %%i in (py py.exe) do (
-    if not defined PYTHON_FOUND (
-        where %%i >nul 2>&1 && set "PYTHON=%%i" && set "PYTHON_FOUND=1"
+set "ROOT=%~dp0"
+set "VENV_DIR=%ROOT%.venv"
+set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
+set "BASE_PY="
+
+for %%i in (py py.exe python) do (
+    if not defined BASE_PY (
+        where %%i >nul 2>&1 && set "BASE_PY=%%i"
     )
 )
-if not defined PYTHON_FOUND (
-    where python >nul 2>&1 && set "PYTHON=python" && set "PYTHON_FOUND=1"
-)
-if not defined PYTHON_FOUND (
-    echo Python isn't available on PATH; please install it or consult IT.
-    pause
-    goto :EOF
+
+if exist "%VENV_PY%" (
+    set "PYTHON=%VENV_PY%"
+) else (
+    if not defined BASE_PY (
+        echo Python isn't available on PATH; please install it or consult IT.
+        pause
+        goto :EOF
+    )
+    echo Creating local .venv for AutoMDFText...
+    %BASE_PY% -m venv "%VENV_DIR%"
+    if errorlevel 1 (
+        echo Failed to create .venv. Check your Python installation.
+        pause
+        goto :EOF
+    )
+    set "PYTHON=%VENV_PY%"
 )
 set "SCRIPTS_DIR=%~dp0scripts"
 if not exist "%SCRIPTS_DIR%" mkdir "%SCRIPTS_DIR%"
