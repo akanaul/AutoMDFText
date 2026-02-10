@@ -30,6 +30,15 @@ _automation_start_time = 0.0
 _automation_time_paused = 0.0
 _pause_start_time = 0.0
 _failsafe_listener = None
+_pause_requested = False
+_pause_active = False
+_pause_lock = threading.Lock()
+_last_write_value = None
+_last_write_verify = False
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip()
 
 
 def log(msg: str) -> None:
@@ -105,6 +114,8 @@ def start_failsafe_f8() -> None:
             log("Failsafe F8 acionado. Encerrando automacao.")
             show_failsafe_alert()
             os._exit(1)
+        if key == keyboard.Key.f9:
+            request_pause()
 
     listener_kwargs = {"on_press": on_press}
     if os.name == "nt":
@@ -165,6 +176,159 @@ def resume_automation_timer() -> None:
         _pause_start_time = 0.0
 
     log(f"[DEBUG PAUSE] Resuming timer. Total paused so far: {_automation_time_paused}s")
+
+
+def request_pause() -> None:
+    """Marca a automacao para pausar na proxima verificacao segura."""
+    global _pause_requested
+    with _pause_lock:
+        if _pause_requested or _pause_active:
+            return
+        _pause_requested = True
+    log("Pausa solicitada (F9). Aguardando ponto seguro para pausar...")
+
+
+def show_pause_dialog() -> str:
+    """Exibe um dialogo topmost de pausa com Retomar ou Cancelar."""
+    root = tk.Tk()
+    root.withdraw()
+
+    result = {"value": "resume"}
+
+    dialog = tk.Toplevel(root)
+    dialog.title("Automacao pausada")
+    dialog.attributes("-topmost", True)
+    dialog.resizable(False, False)
+    dialog.geometry("460x360")
+
+    hwnd = dialog.winfo_id()
+
+    def keep_visible() -> None:
+        if os.name != "nt" or not dialog.winfo_exists():
+            return
+        try:
+            user32 = ctypes.windll.user32
+            SW_SHOW = 5
+            HWND_TOPMOST = -1
+            SWP_NOMOVE = 0x0002
+            SWP_NOSIZE = 0x0001
+            SWP_NOACTIVATE = 0x0010
+            user32.ShowWindow(hwnd, SW_SHOW)
+            user32.SetWindowPos(
+                hwnd,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            )
+        except Exception:
+            pass
+
+    font_label = ("Segoe UI", 11)
+    font_button = ("Segoe UI", 11)
+
+    frame = tk.Frame(dialog, padx=16, pady=18)
+    frame.pack(fill="both", expand=True)
+
+    tk.Label(
+        frame,
+        text=(
+            "A automacao esta pausada.\n\n"
+            "Clique em Retomar para continuar ou em Cancelar para encerrar."
+        ),
+        font=font_label,
+        justify="left",
+        wraplength=380,
+    ).pack(anchor="w")
+
+    button_frame = tk.Frame(frame)
+    button_frame.pack(fill="x", pady=(16, 0))
+
+    def on_resume() -> None:
+        result["value"] = "resume"
+        dialog.destroy()
+
+    def on_cancel() -> None:
+        result["value"] = "cancel"
+        dialog.destroy()
+
+    resume_button = tk.Button(button_frame, text="Retomar", command=on_resume, width=10, font=font_button)
+    resume_button.pack(side="right", padx=(6, 0))
+    cancel_button = tk.Button(button_frame, text="Cancelar automacao", command=on_cancel, width=18, font=font_button)
+    cancel_button.pack(side="right")
+
+    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+    dialog.bind("<Return>", lambda _e: on_resume())
+    dialog.bind("<Escape>", lambda _e: on_cancel())
+
+    def watchdog_visible() -> None:
+        if not dialog.winfo_exists():
+            return
+        keep_visible()
+        dialog.lift()
+        dialog.after(600, watchdog_visible)
+
+    keep_visible()
+    dialog.after(200, watchdog_visible)
+    dialog.wait_window()
+    try:
+        root.destroy()
+    except Exception:
+        pass
+
+    return result["value"]
+
+
+def check_pause() -> None:
+    """Pausa a automacao em um ponto seguro se solicitado."""
+    global _pause_requested, _pause_active
+    if not _pause_requested or _pause_active:
+        return
+
+    _pause_active = True
+    pause_automation_timer()
+    log("Automacao pausada pelo usuario.")
+    _verify_last_write_before_pause()
+    try:
+        decision = show_pause_dialog()
+    finally:
+        _pause_active = False
+
+    if decision == "cancel":
+        log("Automacao cancelada pelo usuario durante a pausa.")
+        raise SystemExit(1)
+
+    with _pause_lock:
+        _pause_requested = False
+    resume_automation_timer()
+    log("Automacao retomada pelo usuario.")
+
+
+def pause_point() -> None:
+    """Ponto seguro para pausar entre etapas."""
+    check_pause()
+
+
+def _verify_last_write_before_pause() -> None:
+    global _last_write_value, _last_write_verify
+    if not _last_write_verify or not _last_write_value:
+        return
+    try:
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.05)
+        pyautogui.hotkey("ctrl", "c")
+        time.sleep(0.05)
+        captured = pyperclip.paste() or ""
+        if _normalize_text(captured) != _normalize_text(_last_write_value):
+            log("Aviso: campo divergente antes da pausa; reaplicando valor.")
+            paste_text(_last_write_value, verify=True, retries=1)
+    except Exception as exc:
+        log(f"Aviso: falha ao reverificar ultimo campo antes da pausa ({exc})")
+    finally:
+        _last_write_value = None
+        _last_write_verify = False
 
 def format_duration(seconds: float) -> str:
     """Formata duracao em segundos para o formato MM:SS ou apenas SS."""
@@ -251,6 +415,8 @@ def smart_write(
 
     Desativa a verificacao para CPF/CNPJ (11/14 digitos) por formatacao automatica.
     """
+    global _last_write_value, _last_write_verify
+    pause_point()
     if value is None:
         return
     text = str(value)
@@ -262,10 +428,13 @@ def smart_write(
     if text.isdigit() and len(text) in (11, 14):
         # CPF/CNPJ normalmente são formatados automaticamente pelo formulário
         verify_effective = False
+    _last_write_value = text
+    _last_write_verify = verify_effective
     if use_paste:
         paste_text(text, verify=verify_effective)
     else:
         pyautogui.write(text, interval=interval)
+    pause_point()
 
 
 def parse_profile(path: Path) -> dict[str, dict[str, str]]:
@@ -1714,8 +1883,6 @@ def main() -> None:
 
     prev_failsafe = pyautogui.FAILSAFE
     pyautogui.FAILSAFE = False
-    start_failsafe_f8()
-
     try:
         # Iniciar contadores de tempo após seleção do script
         real_start_time = 0.0
@@ -1754,12 +1921,15 @@ def main() -> None:
 
         profile = ConfigProfile(profile_path)
         real_start_time = start_automation_session(selected, profile_path)
+        start_failsafe_f8()
+        pause_point()
 
         ui_print("Iniciando preenchimento...", style="step")
         
         # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
         log("Focando navegador (evitando minimizar)")
         focus_browser_if_needed()
+        pause_point()
         
         # GAP - Pressionar ESC 2x
         log("Enviando ESC x2")
@@ -1773,6 +1943,7 @@ def main() -> None:
         time.sleep(0.5)
         pyautogui.press("f5")
         time.sleep(1)
+        pause_point()
 
         # Voltar para aba 1 (uma vez, como no legado)
         log("Voltando para aba 1 e focando em 'empresa'")
@@ -1781,10 +1952,12 @@ def main() -> None:
         # Tab para garantir foco correto
         pyautogui.press("tab")
         time.sleep(0.2)
+        pause_point()
 
         # VALIDAÇÃO DA PÁGINA CT-E (antes do prompt de DT)
         log("Validando página CT-e antes de solicitar DT...")
         max_validations = 3
+        pause_point()
         for attempt in range(1, max_validations + 1):
             pyautogui.press("tab")
             time.sleep(0.2)
@@ -1840,6 +2013,8 @@ def main() -> None:
             )
             raise SystemExit(1)
 
+        pause_point()
+
         # Prompt para DT ANTES de buscar o campo
         prompt_text = profile.get_value("general", "dt_prompt_text")
         if not prompt_text:
@@ -1855,6 +2030,7 @@ def main() -> None:
             focused_alert("Nenhum código DT informado. O script foi pausado.")
             return
         log(f"DT informado: {numero_dt}")
+        pause_point()
 
         # Posicionar em "serie final" e Tab 2x
         log("Posicionando em 'serie final' e tabulando")
@@ -1884,6 +2060,7 @@ def main() -> None:
             ),
             title="Aviso: Baixe o CT-e"
         )
+        pause_point()
 
         ncm_primary = profile.get_value("mdfe", "ncm_primary")
         ncm_secondary = profile.get_value("mdfe", "ncm_secondary")
@@ -1934,36 +2111,43 @@ def main() -> None:
         pyautogui.press("esc")
         time.sleep(0.15)
         ensure_caps_off()
+        pause_point()
 
         # Verificar se o CT-e informado aparece na página antes de ir para a aba 3
         verify_cte_on_page(numero_cte)
+        pause_point()
         
         ui_print("Preenchendo formulário MDF-e...", style="step")
         
         # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
+        pause_point()
         
         # Preencher formulário (passando código NCM já selecionado)
         log("Iniciando preenchimento dos dados MDF-e")
         fill_mdfe(profile, codigo_ncm)
         log("Dados MDF-e preenchidos com sucesso")
         ui_print("Dados MDF-e preenchidos", style="success")
+        pause_point()
         
         log("Iniciando preenchimento do modal rodoviário")
         fill_modal_rodo(profile)
         log("Modal rodoviário preenchido com sucesso")
         ui_print("Modal rodoviário preenchido", style="success")
+        pause_point()
         
         log("Iniciando preenchimento de informações adicionais")
         fill_additional_info(profile)
         log("Informações adicionais preenchidas com sucesso")
         ui_print("Informações adicionais preenchidas", style="success")
+        pause_point()
         
         log("Iniciando processamento de averbação")
         ui_print("Processando averbação...", style="step")
         perform_averbacao(numero_cte, numero_dt, nf_concat)
         log("Averbação processada com sucesso")
+        pause_point()
         
         # Ao finalizar com sucesso, calcular tempos
         real_end_time = time.monotonic()
