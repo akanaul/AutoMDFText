@@ -5,6 +5,7 @@ import re
 import tkinter as tk
 from tkinter import messagebox
 import time
+import threading
 from pathlib import Path
 
 import pyautogui
@@ -566,6 +567,8 @@ def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
         cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel, width=10, font=font_button)
         cancel_button.pack(side="right")
 
+        input_event = threading.Event()
+
         def warn_and_refocus() -> None:
             nonlocal warning_active
             if warning_active or not dialog.winfo_exists():
@@ -586,30 +589,44 @@ def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
         def should_warn() -> bool:
             if not dialog.winfo_exists():
                 return False
+            focus_widget = dialog.focus_get()
+            if focus_widget and focus_widget.winfo_toplevel() == dialog:
+                return False
             if os.name == "nt":
                 try:
                     foreground = ctypes.windll.user32.GetForegroundWindow()
                     return int(foreground) != int(hwnd)
                 except Exception:
                     pass
-            focus_widget = dialog.focus_get()
-            return not (focus_widget and focus_widget.winfo_toplevel() == dialog)
+            return False
 
         def request_warn() -> None:
             if not dialog.winfo_exists():
+                return
+            if warning_active:
                 return
             if should_warn():
                 force_foreground()
                 warn_and_refocus()
 
         def on_global_input() -> None:
-            if not dialog.winfo_exists():
-                return
-            dialog.after(0, request_warn)
+            # Callback de pynput roda fora da thread principal do Tk.
+            input_event.set()
 
         def watchdog_focus() -> None:
             if not dialog.winfo_exists():
                 return
+            if warning_active:
+                dialog.after(250, watchdog_focus)
+                return
+            # Só avisa quando houver tentativa de input fora do prompt.
+            if input_event.is_set():
+                input_event.clear()
+                if should_warn() and not warning_active:
+                    request_warn()
+            # Sempre refoca para manter o prompt ativo.
+            if should_warn():
+                force_foreground()
             force_foreground()
             dialog.lift()
             dialog.focus_force()
@@ -638,6 +655,7 @@ def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
             keyboard_listener = keyboard.Listener(on_press=on_press)
             mouse_listener.start()
             keyboard_listener.start()
+            log("Pynput listeners ativos para monitorar foco da janela de DT")
         except Exception as exc:
             log(f"Aviso: pynput nao disponivel; bloqueio global desativado ({exc})")
 
