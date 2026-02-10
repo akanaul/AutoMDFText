@@ -11,7 +11,6 @@ from pathlib import Path
 import pyautogui
 import pyperclip
 
-
 pyautogui.FAILSAFE = True
 
 BASE_DIR = Path(__file__).parent
@@ -30,6 +29,7 @@ _SINGLETON_MUTEX_HANDLE = None
 _automation_start_time = 0.0
 _automation_time_paused = 0.0
 _pause_start_time = 0.0
+_failsafe_listener = None
 
 
 def log(msg: str) -> None:
@@ -65,6 +65,64 @@ def start_automation_session(selected: str, profile_path: Path) -> float:
     log(f"[DEBUG] _automation_start_time iniciado após escolha do perfil: {_automation_start_time}")
 
     return real_start_time
+
+
+def start_failsafe_f8() -> None:
+    """Inicia um listener global para encerrar a automacao ao pressionar F8."""
+    global _failsafe_listener
+    if _failsafe_listener is not None:
+        return
+    try:
+        from pynput import keyboard
+    except Exception as exc:
+        log(f"Aviso: pynput nao disponivel; failsafe F8 desativado ({exc})")
+        return
+
+    injected = {"value": False}
+
+    def win32_event_filter(_msg, data):
+        flags = getattr(data, "flags", 0)
+        injected["value"] = bool(flags & 0x10)
+        return True
+
+    def show_failsafe_alert() -> None:
+        if os.name != "nt":
+            return
+        try:
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "A automacao foi encerrada pelo botao de seguranca (F8).",
+                "Automacao encerrada",
+                0x00000040 | 0x00040000 | 0x00010000,
+            )
+        except Exception:
+            pass
+
+    def on_press(key) -> None:
+        if injected["value"]:
+            return
+        if key == keyboard.Key.f8:
+            log("Failsafe F8 acionado. Encerrando automacao.")
+            show_failsafe_alert()
+            os._exit(1)
+
+    listener_kwargs = {"on_press": on_press}
+    if os.name == "nt":
+        listener_kwargs["win32_event_filter"] = win32_event_filter
+    _failsafe_listener = keyboard.Listener(**listener_kwargs)
+    _failsafe_listener.start()
+
+
+def stop_failsafe_f8() -> None:
+    """Finaliza o listener de failsafe por F8, se ativo."""
+    global _failsafe_listener
+    if _failsafe_listener is None:
+        return
+    try:
+        _failsafe_listener.stop()
+    except Exception:
+        pass
+    _failsafe_listener = None
 
 
 def ui_print(msg: str, style: str = "info") -> None:
@@ -1654,6 +1712,10 @@ def main() -> None:
     """Fluxo principal da automacao MDF-e."""
     global _automation_start_time, _automation_time_paused
 
+    prev_failsafe = pyautogui.FAILSAFE
+    pyautogui.FAILSAFE = False
+    start_failsafe_f8()
+
     try:
         # Iniciar contadores de tempo após seleção do script
         real_start_time = 0.0
@@ -1746,6 +1808,7 @@ def main() -> None:
             choice = focused_confirm(
                 "Não consegui identificar a primeira aba como a página do Invoisys (CT-e).\n\n"
                 "Ajuste a primeira aba para NOTAS EMITIDAS > CT-e e clique em Tentar novamente.\n"
+                "Certifique-se tambem de que o cursor nao esta dentro de nenhum campo.\n"
                 "Se preferir, clique em Encerrar.",
                 title="Aba do navegador incorreta",
                 buttons=["Tentar novamente", "Encerrar"],
@@ -1765,6 +1828,9 @@ def main() -> None:
                 raise SystemExit(1)
 
             log(f"Tentativa {attempt}/{max_validations}: usuario pediu para tentar novamente.")
+            log("Focando a primeira aba do navegador (Ctrl+1).")
+            pyautogui.hotkey("ctrl", "1")
+            time.sleep(0.5)
 
         else:
             focused_alert(
@@ -1787,7 +1853,6 @@ def main() -> None:
         numero_dt = prompt_dt_blocking(text=prompt_text, title="DT")
         if not numero_dt:
             focused_alert("Nenhum código DT informado. O script foi pausado.")
-            pyautogui.FAILSAFE = True
             return
         log(f"DT informado: {numero_dt}")
 
@@ -1968,6 +2033,9 @@ def main() -> None:
         # Restaurar terminal para que o usuário possa ver o erro
         restore_console_popup()
         raise
+    finally:
+        stop_failsafe_f8()
+        pyautogui.FAILSAFE = prev_failsafe
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title AutoMDFText - MDF-e Toolkit
+title AutoMDFText - Ferramentas MDF-e
 
 set "ROOT=%~dp0"
 set "VENV_DIR=%ROOT%.venv"
@@ -17,14 +17,14 @@ if exist "%VENV_PY%" (
     set "PYTHON=%VENV_PY%"
 ) else (
     if not defined BASE_PY (
-        echo Python isn't available on PATH; please install it or consult IT.
+        echo Python nao esta disponivel no PATH; instale ou consulte a TI.
         pause
         goto :EOF
     )
-    echo Creating local .venv for AutoMDFText...
+    echo Criando .venv local para o AutoMDFText...
     %BASE_PY% -m venv "%VENV_DIR%"
     if errorlevel 1 (
-        echo Failed to create .venv. Check your Python installation.
+        echo Falha ao criar a .venv. Verifique sua instalacao do Python.
         pause
         goto :EOF
     )
@@ -42,12 +42,12 @@ IF ERRORLEVEL 1 goto :EOF
 
 :prompt
 cls
-echo Select an action for the MDF-e automation toolkit:
-echo 1 ^| Run modular MDF-e filler
-echo 2 ^| Launch the script template editor
-echo 3 ^| Install/upgrade Python dependencies
-echo 4 ^| Exit
-choice /C 1234 /N /M "Your choice"
+echo Selecione uma acao para o toolkit de automacao MDF-e:
+echo 1 ^| Executar preenchimento do MDF-e
+echo 2 ^| Abrir o editor de templates de script
+echo 3 ^| Instalar/atualizar dependencias Python
+echo 4 ^| Sair
+choice /C 1234 /N /M "Sua escolha"
 set "CHOICE_RESULT=!errorlevel!"
 
 if %CHOICE_RESULT%==4 goto :EOF
@@ -56,20 +56,20 @@ if %CHOICE_RESULT%==2 goto editor
 if %CHOICE_RESULT%==1 goto modular
 
 :install
-echo Installing required Python packages...^ (pyautogui pyperclip Pillow pywin32 pynput^)
+echo Instalando pacotes Python necessarios...^ (pyautogui pyperclip Pillow pywin32 pynput^)
 %PYTHON% -m pip install --upgrade pip >nul
 %PYTHON% -m pip install pyautogui pyperclip Pillow pywin32 pynput >nul
 if errorlevel 1 (
-    echo Installation failed, check the output above.
+    echo Falha na instalacao, verifique a saida acima.
     pause
     goto prompt
 )
-echo Dependencies installed successfully.
+echo Dependencias instaladas com sucesso.
 pause
 goto prompt
 
 :modular
-echo Running modular MDF-e filler. Press Ctrl+C to abort.
+echo Executando o preenchimento modular do MDF-e. Pressione Ctrl+C para abortar.
 REM Guard before launching, ensure no existing automation is running
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p = Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'modular_mdfe\.py' }; if ($p) { Write-Host 'Automação já em execução. Retornando ao menu...'; exit 1 } else { exit 0 } } catch { exit 0 }"
 IF ERRORLEVEL 1 goto prompt
@@ -79,6 +79,6 @@ IF ERRORLEVEL 99 goto prompt
 goto modular
 
 :editor
-echo Opening the profile editor.
+echo Abrindo o editor de perfis.
 %PYTHON% script_editor.py
 goto prompt
