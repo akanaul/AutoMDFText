@@ -28,6 +28,11 @@ LOG_DIR.mkdir(exist_ok=True)
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
+TAB_DELAY = 0.25
+TAB_DELAY_LONG = 0.35
+CTRL_F_DELAY = 0.4
+DROPDOWN_SETTLE_DELAY = 0.5
+
 # Handle for single-instance mutex to keep it alive during process lifetime
 _SINGLETON_MUTEX_HANDLE = None
 
@@ -358,9 +363,14 @@ def skip_tabs(count: int, log_msg: str = "") -> None:
     """Pula N campos (tabs) com log opcional."""
     if log_msg:
         log(log_msg)
+    press_tab(count=count, delay=TAB_DELAY)
+
+
+def press_tab(count: int = 1, delay: float = TAB_DELAY) -> None:
+    """Pressiona Tab com delay consistente entre navegacoes."""
     for _ in range(count):
         pyautogui.press("tab")
-        time.sleep(0.25)
+        time.sleep(delay)
 
 
 def paste_text(
@@ -1714,15 +1724,17 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
 
     pyautogui.hotkey("ctrl", "f")
+    time.sleep(CTRL_F_DELAY)
     write_additional("SELECIONE...", interval=0.10)
+    time.sleep(CTRL_F_DELAY)
     pyautogui.press("esc")
     time.sleep(0.2)
     pyautogui.press("enter")
-    time.sleep(0.2)
+    time.sleep(CTRL_F_DELAY)
     write_additional("FRETE", interval=0.10)
-    time.sleep(0.2)
+    time.sleep(CTRL_F_DELAY)
     pyautogui.press("enter")
-    time.sleep(0.2)
+    time.sleep(DROPDOWN_SETTLE_DELAY)
     pyautogui.press("tab")
     time.sleep(0.2)
     frete_val2 = profile.get_value("informacoes_adicionais", "frete_valor")
@@ -1732,6 +1744,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     time.sleep(0.2)
     frete_tipo = profile.get_value("informacoes_adicionais", "frete_tipo")
     write_additional(frete_tipo, interval=0.12)
+    time.sleep(0.2)
     pyautogui.press("tab")
     time.sleep(0.2)
     pyautogui.press("enter")
