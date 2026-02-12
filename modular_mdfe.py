@@ -29,15 +29,15 @@ SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
 TAB_DELAY = 0.10
-TAB_DELAY_LONG = 0.20
-CTRL_F_DELAY = 0.4
-DROPDOWN_SETTLE_DELAY = 0.5
-SLEEP_SHORT = 0.10
-SLEEP_MEDIUM = 0.20
-SLEEP_LONG = 0.3
-SLEEP_LONGER = 0.4
-SLEEP_ONE = 0.7
-SLEEP_ONE_HALF = 1.25
+TAB_DELAY_LONG = 0.25
+CTRL_F_DELAY = 0.2
+DROPDOWN_SETTLE_DELAY = 0.4
+SLEEP_SHORT = 0.15
+SLEEP_MEDIUM = 0.25
+SLEEP_LONG = 0.45
+SLEEP_LONGER = 0.7
+SLEEP_ONE = 1.0
+SLEEP_ONE_HALF = 1.5
 # Handle for single-instance mutex to keep it alive during process lifetime
 _SINGLETON_MUTEX_HANDLE = None
 
@@ -1379,8 +1379,7 @@ def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: fl
 
 def navigate_to_mdfe() -> None:
     """Navega para o formulario MDF-e seguindo o fluxo legado ajustado."""
-    # IR PARA 3ª PAGINA - MDF
-    time.sleep(SLEEP_ONE)
+    # IR PARA 3ª PAGINA - MDFE
     pyautogui.hotkey("ctrl", "3")
     time.sleep(SLEEP_ONE)
 
@@ -1548,7 +1547,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     skip_tabs(3)
     cep_dest = profile.get_value("mdfe", "cep_destino")
     smart_write(cep_dest, interval=0.12)
-    time.sleep(1.25)
+    time.sleep(SLEEP_MEDIUM)
     
     log(f"MDF-e concluído: NCM={codigo_ncm_upper}, CEP_Orig={cep_orig}, CEP_Dest={cep_dest}")
 
@@ -1556,19 +1555,19 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
 def fill_modal_rodo(profile: ConfigProfile) -> None:
     """Preenche os dados do Modal Rodoviario conforme o perfil ativo."""
     log("Iniciando preenchimento Modal Rodoviário")
-    time.sleep(SLEEP_ONE_HALF)
+    time.sleep(SLEEP_MEDIUM)
     
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(SLEEP_MEDIUM)
+    time.sleep(SLEEP_SHORT)
     smart_write("modal rodo", interval=0.10)
     time.sleep(SLEEP_SHORT)
     skip_tabs(2)
     pyautogui.press("enter")
-    time.sleep(1.25)
+    time.sleep(SLEEP_LONG)
     pyautogui.press("esc")
     time.sleep(SLEEP_MEDIUM)
     pyautogui.press("enter")
-    time.sleep(1.25)
+    time.sleep(SLEEP_LONG)
 
     # RNTRC, CONTRATANTE, CNPJ
     pyautogui.hotkey("ctrl", "f")
@@ -1616,11 +1615,11 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     write_additional("OPCIONAIS", interval=0.10)
     skip_tabs(2)
     pyautogui.press("enter")
-    time.sleep(SLEEP_ONE)
+    time.sleep(SLEEP_MEDIUM)
     pyautogui.press("esc")
-    time.sleep(SLEEP_LONG)
+    time.sleep(SLEEP_MEDIUM)
     pyautogui.press("enter")
-    time.sleep(SLEEP_ONE)
+    time.sleep(SLEEP_MEDIUM)
 
     # ADICIONAIS - CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
