@@ -290,6 +290,7 @@ def show_pause_dialog() -> str:
             return
         keep_visible()
         dialog.lift()
+        dialog.grab_set()
         dialog.after(600, watchdog_visible)
 
     keep_visible()
@@ -736,36 +737,19 @@ def focused_prompt(text: str = "", title: str = "", default: str = ""):
 
 
 def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
-    """Prompt dedicado para DT com bloqueio e alerta se a janela perder foco."""
+    """Prompt dedicado para DT sem bloqueio global de interacao."""
     pause_automation_timer()
     root = tk.Tk()
     root.withdraw()
 
     result: str | None = None
-    warning_active = False
-
     try:
         dialog = tk.Toplevel(root)
         dialog.title(title)
         dialog.attributes("-topmost", True)
         dialog.resizable(False, False)
         dialog.geometry("460x200")
-        dialog.grab_set_global()
-
-        hwnd = dialog.winfo_id()
-
-        def force_foreground() -> None:
-            if os.name != "nt" or not dialog.winfo_exists():
-                return
-            try:
-                user32 = ctypes.windll.user32
-                SW_SHOW = 5
-                user32.ShowWindow(hwnd, SW_SHOW)
-                user32.BringWindowToTop(hwnd)
-                user32.SetForegroundWindow(hwnd)
-                dialog.attributes("-topmost", True)
-            except Exception:
-                pass
+        dialog.lift()
 
         font_label = ("Segoe UI", 11)
         font_entry = ("Segoe UI", 11)
@@ -782,25 +766,9 @@ def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
         button_frame = tk.Frame(frame)
         button_frame.pack(fill="x")
 
-        mouse_listener = None
-        keyboard_listener = None
-
-        def stop_listeners() -> None:
-            nonlocal mouse_listener, keyboard_listener
-            for listener in (mouse_listener, keyboard_listener):
-                if listener:
-                    try:
-                        listener.stop()
-                    except Exception:
-                        pass
-            mouse_listener = None
-            keyboard_listener = None
-
         def finalize(value: str | None) -> None:
             nonlocal result
             result = value
-            stop_listeners()
-            dialog.grab_release()
             dialog.destroy()
 
         def on_ok() -> None:
@@ -823,109 +791,15 @@ def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
         cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel, width=10, font=font_button)
         cancel_button.pack(side="right")
 
-        input_event = threading.Event()
-
-        def warn_and_refocus() -> None:
-            nonlocal warning_active
-            if warning_active or not dialog.winfo_exists():
-                return
-            warning_active = True
-            try:
-                messagebox.showwarning(
-                    "Atencao",
-                    "A DT precisa ser digitada ou a janela precisa ser fechada antes de "
-                    "interagir com o navegador.",
-                    parent=dialog,
-                )
-            finally:
-                warning_active = False
-            dialog.after(50, lambda: entry.focus_set())
-            dialog.after(50, dialog.lift)
-
-        def should_warn() -> bool:
-            if not dialog.winfo_exists():
-                return False
-            focus_widget = dialog.focus_get()
-            if focus_widget and focus_widget.winfo_toplevel() == dialog:
-                return False
-            if os.name == "nt":
-                try:
-                    foreground = ctypes.windll.user32.GetForegroundWindow()
-                    return int(foreground) != int(hwnd)
-                except Exception:
-                    pass
-            return False
-
-        def request_warn() -> None:
-            if not dialog.winfo_exists():
-                return
-            if warning_active:
-                return
-            if should_warn():
-                force_foreground()
-                warn_and_refocus()
-
-        def on_global_input() -> None:
-            # Callback de pynput roda fora da thread principal do Tk.
-            input_event.set()
-
-        def watchdog_focus() -> None:
-            if not dialog.winfo_exists():
-                return
-            if warning_active:
-                dialog.after(250, watchdog_focus)
-                return
-            # Só avisa quando houver tentativa de input fora do prompt.
-            if input_event.is_set():
-                input_event.clear()
-                if should_warn() and not warning_active:
-                    request_warn()
-            # Sempre refoca para manter o prompt ativo.
-            if should_warn():
-                force_foreground()
-            force_foreground()
-            dialog.lift()
-            dialog.focus_force()
-            entry.focus_set()
-            dialog.after(250, watchdog_focus)
-
-        def on_key_press(event) -> str | None:
-            focus_widget = dialog.focus_get()
-            if focus_widget not in {entry, ok_button, cancel_button}:
-                force_foreground()
-                warn_and_refocus()
-                return "break"
-            return None
-
-        try:
-            from pynput import keyboard, mouse
-
-            def on_click(_x, _y, _button, pressed) -> None:
-                if pressed:
-                    on_global_input()
-
-            def on_press(_key) -> None:
-                on_global_input()
-
-            mouse_listener = mouse.Listener(on_click=on_click)
-            keyboard_listener = keyboard.Listener(on_press=on_press)
-            mouse_listener.start()
-            keyboard_listener.start()
-            log("Pynput listeners ativos para monitorar foco da janela de DT")
-        except Exception as exc:
-            log(f"Aviso: pynput nao disponivel; bloqueio global desativado ({exc})")
-
-        dialog.bind("<KeyPress>", on_key_press)
         dialog.protocol("WM_DELETE_WINDOW", on_cancel)
         dialog.bind("<Return>", lambda _e: on_ok())
         dialog.bind("<Escape>", lambda _e: on_cancel())
 
         entry.focus_set()
-        force_foreground()
-        dialog.after(250, watchdog_focus)
+        dialog.focus_force()
+        dialog.after(50, entry.focus_set)
         dialog.wait_window()
     finally:
-        stop_listeners()
         try:
             root.destroy()
         except Exception:
@@ -1354,8 +1228,6 @@ def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: fl
     inicio = time.monotonic()
     while time.monotonic() - inicio < tempo_maximo:
         try:
-            pyautogui.press("tab")
-            time.sleep(0.15)
             pyautogui.hotkey("ctrl", "a")
             time.sleep(0.15)
             pyautogui.hotkey("ctrl", "c")
@@ -1982,72 +1854,13 @@ def main() -> None:
         pause_point()
 
         # Voltar para aba 1 (uma vez, como no legado)
-        log("Voltando para aba 1 e focando em 'empresa'")
+        log("Voltando para aba 1")
         pyautogui.hotkey("ctrl", "1")
         time.sleep(SLEEP_LONG)
         # Tab para garantir foco correto
-        pyautogui.press("tab")
-        time.sleep(SLEEP_SHORT)
+        pyautogui.press("esc")
+        time.sleep(SLEEP_LONG)
         pause_point()
-
-        # VALIDAÇÃO DA PÁGINA CT-E (antes do prompt de DT)
-        log("Validando página CT-e antes de solicitar DT...")
-        max_validations = 3
-        pause_point()
-        for attempt in range(1, max_validations + 1):
-            pyautogui.press("tab")
-            time.sleep(SLEEP_SHORT)
-            time.sleep(3)
-
-            # Tentar validar a página
-            try:
-                conteudo_validacao = wait_for_form("notas emitidas: ct-e", tempo_maximo=5, intervalo=1, copy_attempts=2)
-            except SystemExit:
-                log("Formulário CT-e não detectado; solicitando ajuste da primeira aba.")
-                conteudo_validacao = ""
-            log("Página CT-e detectada. Verificando presença de 'NÚMERO CT-E'...")
-
-            # Verificar se a página contém "NÚMERO CT-E"
-            conteudo_upper = conteudo_validacao.upper()
-            if "NÚMERO CT-E" in conteudo_upper or "NUMERO CT-E" in conteudo_upper:
-                log("'NÚMERO CT-E' confirmado. Página válida para continuar.")
-                break
-
-            log("ERRO: 'NÚMERO CT-E' não encontrado na página. Página incorreta detectada!")
-            choice = focused_confirm(
-                "Não consegui identificar a primeira aba como a página do Invoisys (CT-e).\n\n"
-                "Ajuste a primeira aba para NOTAS EMITIDAS > CT-e e clique em Tentar novamente.\n"
-                "Certifique-se tambem de que o cursor nao esta dentro de nenhum campo.\n"
-                "Se preferir, clique em Encerrar.",
-                title="Aba do navegador incorreta",
-                buttons=["Tentar novamente", "Encerrar"],
-            )
-            if choice != "Tentar novamente":
-                focused_alert(
-                    "ERRO: Página de CT-e não foi reconhecida!\n\n"
-                    "A automação foi interrompida porque não foi possível identificar\n"
-                    "a página correta de notas emitidas (CT-e).\n\n"
-                    "Verifique:\n"
-                    "• Se você está na página correta do sistema\n"
-                    "• Se a primeira aba do navegador está aberta no Invoisys em NOTAS EMITIDAS > CT-e\n"
-                    "\n"
-                    "A automação será encerrada.",
-                    title="ERRO: Página CT-e não Reconhecida"
-                )
-                raise SystemExit(1)
-
-            log(f"Tentativa {attempt}/{max_validations}: usuario pediu para tentar novamente.")
-            log("Focando a primeira aba do navegador (Ctrl+1).")
-            pyautogui.hotkey("ctrl", "1")
-            time.sleep(SLEEP_LONG)
-
-        else:
-            focused_alert(
-                "ERRO: Página de CT-e não foi reconhecida após varias tentativas.\n\n"
-                "A automação será encerrada.",
-                title="ERRO: Página CT-e não Reconhecida"
-            )
-            raise SystemExit(1)
 
         pause_point()
 
@@ -2067,6 +1880,9 @@ def main() -> None:
             focused_alert("Nenhum código DT informado. O script foi pausado.")
             return
         log(f"DT informado: {numero_dt}")
+        log("Focando a primeira aba do navegador (Ctrl+1) apos o DT")
+        pyautogui.hotkey("ctrl", "1")
+        time.sleep(SLEEP_LONG)
         pause_point()
 
         # Posicionar em "serie final" e Tab 2x
@@ -2117,6 +1933,10 @@ def main() -> None:
             focused_alert("Nenhuma informação foi informada. O script foi pausado.")
             raise SystemExit(1)
 
+        log("Focando a primeira aba do navegador (Ctrl+1) apos o prompt de dados")
+        pyautogui.hotkey("ctrl", "1")
+        time.sleep(SLEEP_LONG)
+
         numero_cte = batch.get("cte", "")
         nf1 = batch.get("nf1", "")
         nf2 = batch.get("nf2", "")
@@ -2131,6 +1951,10 @@ def main() -> None:
                 title="CT-e obrigatório"
             )
             raise SystemExit(1)
+
+        # Verificar se o CT-e informado aparece na página após inserir a DT
+        verify_cte_on_page(numero_cte)
+        pause_point()
 
         # Concatenar apenas se ambas informadas; caso contrário usar a que foi preenchida
         if nf1 and nf2:
@@ -2150,10 +1974,6 @@ def main() -> None:
         ensure_caps_off()
         pause_point()
 
-        # Verificar se o CT-e informado aparece na página antes de ir para a aba 3
-        verify_cte_on_page(numero_cte)
-        pause_point()
-        
         ui_print("Preenchendo formulário MDF-e...", style="step")
         
         # Preencher formularios principais
