@@ -1220,24 +1220,89 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
     raise SystemExit(1)
 
 
+def _normalize_digits(value: str) -> str:
+    return re.sub(r"\D", "", value or "")
+
+
+EDGE_SEARCHBAR_HEIGHT = 70
+EDGE_CLICK_OFFSET = 200
+
+
+def _click_below_edge_searchbar(offset: int = EDGE_CLICK_OFFSET) -> None:
+    """Clica ~50px abaixo da barra de pesquisa do Edge para focar o conteúdo."""
+    if os.name != "nt":
+        width, height = pyautogui.size()
+        pyautogui.click(width // 2, height // 2)
+        return
+
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        width, height = pyautogui.size()
+        pyautogui.click(width // 2, height // 2)
+        return
+
+    rect = ctypes.wintypes.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        width, height = pyautogui.size()
+        pyautogui.click(width // 2, height // 2)
+        return
+
+    left, top, right, bottom = rect.left, rect.top, rect.right, rect.bottom
+    x = (left + right) // 2
+    y = top + EDGE_SEARCHBAR_HEIGHT + offset
+    if y >= bottom - 10:
+        y = top + max(10, (bottom - top) // 3)
+
+    pyautogui.click(x, y)
+
+
+def _focus_page_for_copy() -> None:
+    """Garante foco no corpo da página antes de copiar (evita pegar barra de endereço)."""
+    try:
+        pyautogui.press("esc")
+        time.sleep(0.05)
+        _click_below_edge_searchbar()
+        time.sleep(0.10)
+    except Exception:
+        pass
+
+
 def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
     """Copia o conteúdo da página e confirma a presença do CT-e informado."""
     if not numero_cte:
         return
 
+    raw_cte = str(numero_cte).strip()
+    digits_cte = _normalize_digits(raw_cte)
+    pattern = None
+    if digits_cte:
+        pattern = re.compile(rf"(?<!\d){re.escape(digits_cte)}(?!\d)")
+
     inicio = time.monotonic()
     while time.monotonic() - inicio < tempo_maximo:
         try:
-            pyautogui.hotkey("ctrl", "a")
-            time.sleep(0.15)
-            pyautogui.hotkey("ctrl", "c")
-            time.sleep(SLEEP_SHORT)
+            _focus_page_for_copy()
+            for _ in range(2):
+                pyautogui.hotkey("ctrl", "a")
+                time.sleep(0.12)
+                pyautogui.hotkey("ctrl", "c")
+                time.sleep(SLEEP_SHORT)
+
             conteudo = pyperclip.paste() or ""
-            if str(numero_cte) in conteudo:
-                log(f"CT-e {numero_cte} encontrado na página.")
+            if raw_cte and raw_cte in conteudo:
+                log(f"CT-e {numero_cte} encontrado na página (match direto).")
                 return
-        except Exception:
-            pass
+            if digits_cte:
+                if pattern and pattern.search(conteudo):
+                    log(f"CT-e {numero_cte} encontrado na página (match numérico).")
+                    return
+                conteudo_digits = _normalize_digits(conteudo)
+                if digits_cte in conteudo_digits:
+                    log(f"CT-e {numero_cte} encontrado na página (match normalizado).")
+                    return
+        except Exception as exc:
+            log(f"Aviso: falha ao verificar CT-e na página ({exc})")
 
         time.sleep(intervalo)
 
@@ -1888,18 +1953,23 @@ def main() -> None:
         # Posicionar em "serie final" e Tab 2x
         log("Posicionando em 'serie final' e tabulando")
         pyautogui.hotkey("ctrl", "f")
-        time.sleep(2)
+        time.sleep(1)
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.15)
+        pyautogui.press("backspace")
+        time.sleep(0.15)
         smart_write("DO DT", interval=0.12)
+        time.sleep(SLEEP_MEDIUM)
         pyautogui.press("esc")
         time.sleep(SLEEP_LONG)
         pyautogui.press("tab")
-        time.sleep(SLEEP_LONGER)
+        time.sleep(SLEEP_LONG)
         
         # Usar o DT armazenado previamente
         log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
-        smart_write(numero_dt.upper(), interval=0.1)
-        time.sleep(SLEEP_MEDIUM)
-        pyautogui.press("enter")
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.15)
+        paste_text(numero_dt.upper(), verify=True)
         time.sleep(SLEEP_MEDIUM)
         pyautogui.press("enter")
         time.sleep(SLEEP_LONG)
