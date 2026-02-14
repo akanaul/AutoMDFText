@@ -34,7 +34,7 @@ CTRL_F_DELAY = 0.2
 DROPDOWN_SETTLE_DELAY = 0.4
 SLEEP_SHORT = 0.15
 SLEEP_MEDIUM = 0.25
-SLEEP_LONG = 0.45
+SLEEP_LONG = 0.40
 SLEEP_LONGER = 0.7
 SLEEP_ONE = 1.0
 SLEEP_ONE_HALF = 1.5
@@ -1270,6 +1270,8 @@ def _focus_page_for_copy() -> None:
 
 def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
     """Copia o conteúdo da página e confirma a presença do CT-e informado."""
+    pyautogui.press("esc")
+    time.sleep(SLEEP_SHORT)
     pyautogui.hotkey("ctrl", "1")
     time.sleep(SLEEP_LONG)
     if not numero_cte:
@@ -1384,7 +1386,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     # UF CARREGAMENTO E DESCARREGAMENTO
     uf_car = profile.get_value("mdfe", "uf_carregamento")
     smart_write(uf_car, interval=0.20)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_LONG)
     pyautogui.press("enter")
     time.sleep(SLEEP_MEDIUM)
     pyautogui.press("tab")
@@ -1393,13 +1395,13 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     time.sleep(SLEEP_MEDIUM)
     uf_desc = profile.get_value("mdfe", "uf_descarga")
     smart_write(uf_desc, interval=0.20)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_LONG)
     pyautogui.press("enter")
-    time.sleep(SLEEP_LONGER)
+    time.sleep(SLEEP_SHORT)
 
     # MUNICIPIO DE CARREGAMENTO
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     municipio = profile.get_value("mdfe", "municipio_carregamento").upper()
     smart_write(municipio, interval=0.15)
     time.sleep(SLEEP_MEDIUM)
@@ -1537,7 +1539,7 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     time.sleep(SLEEP_SHORT)
     skip_tabs(2)
     pyautogui.press("enter")
-    time.sleep(1.25)
+    time.sleep(SLEEP_LONG)
     
     log(f"Modal Rodoviário: RNTRC={rntrc}, Contratante={contratante}, CNPJ={cnpj_cont}")
 
@@ -1768,9 +1770,9 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
 
     # Extrair número de averbação e copiar apenas os dígitos
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_LONG)
     pyautogui.hotkey("ctrl", "c")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_LONG)
     texto = pyperclip.paste()
     numero_averbacao = ""
     match = re.search(r"Número de Averbação:\s*([\d]+)", texto)
@@ -1800,7 +1802,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         time.sleep(SLEEP_MEDIUM)
     if numero_averbacao:
         pyperclip.copy(numero_averbacao)
-        time.sleep(0.1)
+        time.sleep(0.12)
         pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_SHORT)
     pyautogui.press("tab")
@@ -1822,31 +1824,14 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     pyautogui.press("tab")
     time.sleep(SLEEP_MEDIUM)
 
-    # DT sempre vem do prompt (numero_dt) capturado no início
-    write_averbacao("DT: ", interval=0.1)
-    time.sleep(SLEEP_MEDIUM)
-    if numero_dt:
-        pyperclip.copy(numero_dt)
-        pyautogui.hotkey("ctrl", "v")
-    time.sleep(SLEEP_LONG)
-
-    # CT-e: usar o valor informado pelo usuário
-    write_averbacao(" CTE: ", interval=0.1)
-    time.sleep(SLEEP_LONG)
-    if numero_cte:
-        log(f"Usando CT-e informado pelo usuário: {numero_cte}")
-        pyperclip.copy(numero_cte)
-        pyautogui.hotkey("ctrl", "v")
-        time.sleep(SLEEP_LONG)
-    else:
-        log("CT-e não informado; campo ficará vazio")
-        time.sleep(SLEEP_LONG)
-
-    # Finalizar com rótulo NF sempre; deixa vazio se não informado
-    if nf_concat:
-        write_averbacao(f" NF: {nf_concat}", interval=0.1)
-    else:
-        write_averbacao(" NF: ", interval=0.1)
+    # Preparar texto com DT, CTE e NF
+    combined_text = f"DT: {numero_dt if numero_dt else ''} CTE: {numero_cte if numero_cte else ''} NF: {nf_concat if nf_concat else ''}"
+    log(f"Colando todas as informações de uma vez: {combined_text}")
+    
+    # Colar tudo de uma vez
+    pyperclip.copy(combined_text)
+    time.sleep(SLEEP_SHORT)
+    pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_LONG)
 
 
