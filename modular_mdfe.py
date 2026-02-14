@@ -2023,6 +2023,7 @@ def main() -> None:
             raise SystemExit(1)
 
         # Verificar se o CT-e informado aparece na página após inserir a DT
+        pyautogui.hotkey("ctrl", "1")
         verify_cte_on_page(numero_cte)
         pause_point()
 
