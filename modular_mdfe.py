@@ -1270,6 +1270,8 @@ def _focus_page_for_copy() -> None:
 
 def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
     """Copia o conteúdo da página e confirma a presença do CT-e informado."""
+    pyautogui.hotkey("ctrl", "1")
+    time.sleep(SLEEP_LONG)
     if not numero_cte:
         return
 
@@ -2023,7 +2025,6 @@ def main() -> None:
             raise SystemExit(1)
 
         # Verificar se o CT-e informado aparece na página após inserir a DT
-        pyautogui.hotkey("ctrl", "1")
         verify_cte_on_page(numero_cte)
         pause_point()
 
