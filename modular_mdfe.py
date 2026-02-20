@@ -1326,7 +1326,9 @@ def navigate_to_mdfe() -> None:
 
     # ABRIR DADOS DO MDF-E
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(SLEEP_MEDIUM)
+    time.sleep(SLEEP_LONG)
+    pyautogui.press("home")
+    time.sleep(SLEEP_SHORT)
     log("Procurando por 'EMITIR NOTA'")
     smart_write("EMITIR NOTA", interval=0.10)
     time.sleep(SLEEP_MEDIUM)
@@ -1422,7 +1424,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
         pyautogui.press("tab")
         time.sleep(SLEEP_SHORT)
     pyautogui.press("space")
-    time.sleep(SLEEP_ONE_HALF)
+    time.sleep(SLEEP_ONE)
     log("Carregando arquivo XML...")
     upload_latest_xml()
     time.sleep(SLEEP_LONG)
@@ -1763,10 +1765,10 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         pyautogui.press("esc")
         time.sleep(SLEEP_SHORT)
         pyautogui.press("enter")
-        time.sleep(SLEEP_MEDIUM)
+        time.sleep(SLEEP_ONE)
 
     upload_latest_xml()
-    time.sleep(2.5)
+    time.sleep(2)
 
     # Extrair número de averbação e copiar apenas os dígitos
     pyautogui.hotkey("ctrl", "a")
