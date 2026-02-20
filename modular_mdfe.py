@@ -1327,6 +1327,9 @@ def navigate_to_mdfe() -> None:
     # ABRIR DADOS DO MDF-E
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_LONG)
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(SLEEP_SHORT)  # Seleciona tudo
+    pyautogui.press("delete")         # Apaga o campo
     pyautogui.press("home")
     time.sleep(SLEEP_SHORT)
     log("Procurando por 'EMITIR NOTA'")
@@ -1339,6 +1342,9 @@ def navigate_to_mdfe() -> None:
     
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
+    pyautogui.hotkey("ctrl", "a")  # Seleciona tudo
+    time.sleep(SLEEP_SHORT)
+    pyautogui.press("delete")         # Apaga o campo
     log("Procurando por 'MDF-E'")
     smart_write("MDF-E", interval=0.10)
     time.sleep(SLEEP_MEDIUM)
@@ -1359,6 +1365,9 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
+    pyautogui.hotkey("ctrl", "a")
+    time.sleep(SLEEP_SHORT)  # Seleciona tudo
+    pyautogui.press("delete")         # Apaga o campo
     smart_write("SELECIONE...", interval=0.20)
     time.sleep(SLEEP_SHORT)
     pyautogui.press("esc")
