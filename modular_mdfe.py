@@ -1948,18 +1948,28 @@ def main() -> None:
         time.sleep(SLEEP_LONG)
         pause_point()
 
-        # Posicionar em "serie final" e Tab 2x
-        log("Posicionando em 'serie final' e tabulando")
+        # reforçar foco no navegador antes de enviar Ctrl+F
+        focus_browser_if_needed()
+        log("Enviando Ctrl+F para abrir a busca de página")
+        # pequeno delay para garantir que o foco esteja estável
+        time.sleep(0.15)
+
+        # Buscar pelo rótulo "DO DT" para posicionar o foco no campo correto
+        # (antigo fluxo usava "serie final", mas agora o texto mudou)
+        log("Acionando busca por rótulo 'DO DT' e navegando até o campo")
         pyautogui.hotkey("ctrl", "f")
-        time.sleep(1)
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.15)
-        pyautogui.press("backspace")
-        time.sleep(0.15)
-        smart_write("DO DT", interval=0.12)
         time.sleep(SLEEP_MEDIUM)
-        pyautogui.press("esc")
+        # limpar busca anterior
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.3)
+        pyautogui.press("backspace")
+        time.sleep(0.3)
+        smart_write("DO DT", interval=0.12)
         time.sleep(SLEEP_LONG)
+        # confirmar busca para que o navegador posicione o cursor
+        pyautogui.press("esc")
+        time.sleep(SLEEP_LONGER)
+        # dois tabs levam ao campo onde o número da DT deve ser preenchido
         pyautogui.press("tab")
         time.sleep(SLEEP_LONG)
         
@@ -1967,7 +1977,8 @@ def main() -> None:
         log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
         pyautogui.hotkey("ctrl", "a")
         time.sleep(0.15)
-        paste_text(numero_dt.upper(), verify=True)
+        # escrever o número manualmente para que fique visível no fluxo
+        smart_write(numero_dt.upper(), interval=0.08, verify=True)
         time.sleep(SLEEP_MEDIUM)
         pyautogui.press("enter")
         time.sleep(SLEEP_LONG)
@@ -2001,6 +2012,10 @@ def main() -> None:
             focused_alert("Nenhuma informação foi informada. O script foi pausado.")
             raise SystemExit(1)
 
+        log("Garantindo foco no navegador antes de voltar para a aba 1")
+        focus_browser_if_needed()
+        # aguardar um instante para que a janela ganhe foco
+        time.sleep(0.15)
         log("Focando a primeira aba do navegador (Ctrl+1) apos o prompt de dados")
         pyautogui.hotkey("ctrl", "1")
         time.sleep(SLEEP_LONG)
