@@ -1145,7 +1145,7 @@ def focus_browser_if_needed() -> None:
 
 def upload_latest_xml() -> None:
     """Seleciona o arquivo mais recente em Downloads e confirma o upload."""
-    time.sleep(SLEEP_MEDIUM)
+    time.sleep(SLEEP_LONG)
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
     if not list_of_files:
@@ -1153,7 +1153,7 @@ def upload_latest_xml() -> None:
         return
     latest_file = max(list_of_files, key=os.path.getctime)
     smart_write(str(latest_file), interval=0.12)
-    time.sleep(SLEEP_MEDIUM)
+    time.sleep(SLEEP_LONG)
     pyautogui.press("enter")
 
 

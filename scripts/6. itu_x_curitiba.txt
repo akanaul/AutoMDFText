@@ -3,7 +3,7 @@ dt_prompt_text = Digite o número do DT:
 
 [MDFE]
 prestador_tipo = PRESTADOR
-emitente_codigo = 0315-60
+emitente_codigo = 031560
 uf_carregamento = SP
 uf_descarga = PR
 municipio_carregamento = ITU
