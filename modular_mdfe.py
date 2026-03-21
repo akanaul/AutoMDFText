@@ -1,7 +1,8 @@
-﻿"""Automacao MDF-e com selecao de perfil, prompts gui e preenchimento via teclado.
+﻿# -*- coding: utf-8 -*-
+"""Automação MDF-e com seleção de perfil, prompts GUI e preenchimento via teclado.
 
-Inclui failsafe (F8), pausa (F9) e validacoes de tela para reduzir erros de
-preenchimento em formularios do navegador.
+Inclui failsafe (F8), pausa (F9) e validações de tela para reduzir erros de
+preenchimento em formulários do navegador.
 """
 
 import argparse
@@ -28,12 +29,12 @@ LOG_DIR.mkdir(exist_ok=True)
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
-TAB_DELAY = 0.10
-TAB_DELAY_LONG = 0.25
-CTRL_F_DELAY = 0.2
+TAB_DELAY = 0.25
+TAB_DELAY_LONG = 0.50
+CTRL_F_DELAY = 0.25
 DROPDOWN_SETTLE_DELAY = 0.4
-SLEEP_SHORT = 0.15
-SLEEP_MEDIUM = 0.25
+SLEEP_SHORT = 0.20
+SLEEP_MEDIUM = 0.30
 SLEEP_LONG = 0.40
 SLEEP_LONGER = 0.7
 SLEEP_ONE = 1.0
@@ -41,7 +42,7 @@ SLEEP_ONE_HALF = 1.5
 # Handle for single-instance mutex to keep it alive during process lifetime
 _SINGLETON_MUTEX_HANDLE = None
 
-# Variáveis de tracking de tempo
+# Variaveis de tracking de tempo
 _automation_start_time = 0.0
 _automation_time_paused = 0.0
 _pause_start_time = 0.0
@@ -65,7 +66,7 @@ def log(msg: str) -> None:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
-        # Não interromper fluxo por falha de log em disco
+        # No interromper fluxo por falha de log em disco
         pass
 
 
@@ -119,7 +120,7 @@ def start_failsafe_f8() -> None:
         try:
             ctypes.windll.user32.MessageBoxW(
                 0,
-                "A automacao foi encerrada pelo botao de seguranca (F8).",
+                "A automação foi encerrada pelo botao de seguranca (F8).",
                 "Automacao encerrada",
                 0x00000040 | 0x00040000 | 0x00010000,
             )
@@ -130,7 +131,7 @@ def start_failsafe_f8() -> None:
         if injected["value"]:
             return
         if key == keyboard.Key.f8:
-            log("Failsafe F8 acionado. Encerrando automacao.")
+            log("Failsafe F8 acionado. Encerrando automação.")
             show_failsafe_alert()
             os._exit(1)
         if key == keyboard.Key.f9:
@@ -166,17 +167,17 @@ def ui_print(msg: str, style: str = "info") -> None:
     RESET = "\033[0m"
     
     if style == "success":
-        print(f"{GREEN}✓{RESET} {msg}")
+        print(f"{GREEN}?{RESET} {msg}")
     elif style == "error":
-        print(f"{RED}✗{RESET} {msg}")
+        print(f"{RED}?{RESET} {msg}")
     elif style == "warning":
-        print(f"{YELLOW}⚠{RESET} {msg}")
+        print(f"{YELLOW}?{RESET} {msg}")
     elif style == "step":
-        print(f"{BLUE}▸{RESET} {msg}")
+        print(f"{BLUE}?{RESET} {msg}")
     elif style == "header":
-        print(f"\n{CYAN}{'═' * 60}{RESET}")
+        print(f"\n{CYAN}{'-' * 60}{RESET}")
         print(f"{BOLD}{msg}{RESET}")
-        print(f"{CYAN}{'═' * 60}{RESET}\n")
+        print(f"{CYAN}{'-' * 60}{RESET}\n")
     else:
         print(f"  {msg}")
 
@@ -198,7 +199,7 @@ def resume_automation_timer() -> None:
 
 
 def request_pause() -> None:
-    """Marca a automacao para pausar na proxima verificacao segura."""
+    """Marca a automação para pausar na próxima verificação segura."""
     global _pause_requested
     with _pause_lock:
         if _pause_requested or _pause_active:
@@ -210,7 +211,7 @@ def request_pause() -> None:
 def show_pause_dialog() -> str:
     """Exibe um dialogo topmost de pausa sem roubar foco.
 
-    Retorna "resume" para continuar ou "cancel" para encerrar a automacao.
+    Retorna "resume" para continuar ou "cancel" para encerrar a automação.
     """
     root = tk.Tk()
     root.withdraw()
@@ -257,7 +258,7 @@ def show_pause_dialog() -> str:
     tk.Label(
         frame,
         text=(
-            "A automacao esta pausada.\n\n"
+            "A automação esta pausada.\n\n"
             "Clique em Retomar para continuar ou em Cancelar para encerrar."
         ),
         font=font_label,
@@ -278,7 +279,7 @@ def show_pause_dialog() -> str:
 
     resume_button = tk.Button(button_frame, text="Retomar", command=on_resume, width=10, font=font_button)
     resume_button.pack(side="right", padx=(6, 0))
-    cancel_button = tk.Button(button_frame, text="Cancelar automacao", command=on_cancel, width=18, font=font_button)
+    cancel_button = tk.Button(button_frame, text="Cancelar automação", command=on_cancel, width=18, font=font_button)
     cancel_button.pack(side="right")
 
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -437,13 +438,13 @@ def paste_text(
 
 def smart_write(
     value: str,
-    interval: float = 0.10,
-    min_paste_len: int = 4,
+    interval: float = 0.12,
+    min_paste_len: int = 6,
     verify: bool = True,
 ) -> None:
     """Escolhe entre digitar e colar, com verificação opcional.
 
-    Desativa a verificacao para CPF/CNPJ (11/14 digitos) por formatacao automatica.
+    Desativa a verificação para CPF/CNPJ (11/14 dígitos) por formatação automática.
     """
     global _last_write_value, _last_write_verify
     pause_point()
@@ -565,7 +566,7 @@ def play_low_beep() -> None:
     """Emite um beep de baixa frequência ao final da automação."""
     try:
         if os.name == "nt":
-            # Frequência baixa (~400Hz), duração 180ms
+            # Frequncia baixa (~400Hz), durao 180ms
             import winsound
             winsound.Beep(400, 180)
         else:
@@ -577,7 +578,7 @@ def play_low_beep() -> None:
 
 def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate: str = "warn") -> None:
     """Impede execução duplicada usando um Mutex nomeado do Windows.
-    Se já existir outra instância:
+    Se j existir outra instncia:
     - on_duplicate == 'warn': exibe alerta e encerra este processo
     - on_duplicate == 'kill': encerra este processo (equivale a matar o duplicado)
     """
@@ -595,7 +596,7 @@ def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate
             pass
         raise SystemExit(0)
     else:
-        # Manter handle vivo para não liberar o mutex
+        # Manter handle vivo para no liberar o mutex
         global _SINGLETON_MUTEX_HANDLE
         _SINGLETON_MUTEX_HANDLE = handle
 
@@ -603,11 +604,11 @@ def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate
 def choose_profile(interactive_list: list[str]) -> str:
     log("Iniciando seleção de perfil")
     if not interactive_list:
-        log("Nenhum script disponível; diretório scripts/ está vazio.")
+        log("Nenhum script disponvel; diretrio scripts/ est vazio.")
         try:
             focused_alert(
                 "Nenhum script encontrado em scripts/.\n\n"
-                "Adicione um arquivo .txt de configuração e tente novamente.",
+                "Adicione um arquivo .txt de configurao e tente novamente.",
                 title="Nenhum script encontrado"
             )
         except Exception:
@@ -623,24 +624,24 @@ def choose_profile(interactive_list: list[str]) -> str:
     RESET = "\033[0m"
     
     selected_profile = None
-    max_attempts = 100  # Proteção contra loops infinitos por erro de lógica
+    max_attempts = 100  # Proteo contra loops infinitos por erro de lgica
     attempts = 0
     
-    # Loop até que uma seleção válida seja feita
+    # Loop at que uma seleção vlida seja feita
     while not selected_profile and attempts < max_attempts:
         attempts += 1
         
         try:
-            # Revalidar lista a cada iteração (caso arquivos sejam adicionados/removidos)
+            # Revalidar lista a cada iterao (caso arquivos sejam adicionados/removidos)
             current_list = list_profiles()
             if not current_list:
-                log("Lista de scripts ficou vazia durante seleção; sem perfil padrão disponível.")
+                log("Lista de scripts ficou vazia durante seleção; sem perfil padro disponvel.")
                 raise SystemExit(1)
             
             # Atualizar lista se mudou
             if current_list != interactive_list:
                 interactive_list = current_list
-                log(f"Lista de scripts atualizada: {len(interactive_list)} scripts disponíveis.")
+                log(f"Lista de scripts atualizada: {len(interactive_list)} scripts disponveis.")
             
             # Menu destacado com cores e separadores
             print(f"\n{CYAN}{'=' * 60}{RESET}")
@@ -652,23 +653,23 @@ def choose_profile(interactive_list: list[str]) -> str:
             for idx, name in enumerate(interactive_list, start=1):
                 print(f"{YELLOW}  [{idx}]{RESET} {name}")
             
-            print(f"\n{CYAN}{'─' * 60}{RESET}")
+            print(f"\n{CYAN}{'-' * 60}{RESET}")
             print(f"{BOLD}Digite o número do script desejado (ou 0 para voltar):{RESET}")
-            print(f"{CYAN}{'─' * 60}{RESET}\n")
+            print(f"{CYAN}{'-' * 60}{RESET}\n")
             
             choice = input(f"{BOLD}Opção: {RESET}").strip()
             
             # Validar entrada
             if not choice:
-                print(f"\n{RED}✗ Erro: Você deve selecionar um script!{RESET}")
+                print(f"\n{RED}? Erro: Voc deve selecionar um script!{RESET}")
                 log("Entrada vazia; solicitando nova seleção.")
                 time.sleep(SLEEP_ONE_HALF)
                 continue
             
-            # Verificar opção "0" para voltar
+            # Verificar opo "0" para voltar
             if choice == "0":
-                print(f"\n{GREEN}✓ Retornando ao menu anterior...{RESET}\n")
-                log("Usuário escolheu retornar ao menu anterior")
+                print(f"\n{GREEN}? Retornando ao menu anterior...{RESET}\n")
+                log("Usurio escolheu retornar ao menu anterior")
                 raise SystemExit(99)
             
             # Tentar converter para número
@@ -677,14 +678,14 @@ def choose_profile(interactive_list: list[str]) -> str:
                     index = int(choice) - 1
                     if 0 <= index < len(interactive_list):
                         selected_profile = interactive_list[index]
-                        log(f"Script selecionado por índice {choice}: {selected_profile}")
+                        log(f"Script selecionado por ndice {choice}: {selected_profile}")
                     else:
-                        print(f"\n{RED}✗ Erro: Número inválido! Escolha entre 1 e {len(interactive_list)}.{RESET}")
+                        print(f"\n{RED}? Erro: Número inválido! Escolha entre 1 e {len(interactive_list)}.{RESET}")
                         log(f"Opção fora do intervalo: {choice}")
                         time.sleep(SLEEP_ONE_HALF)
                 except (ValueError, IndexError) as e:
-                    print(f"\n{RED}✗ Erro ao processar número: {str(e)}{RESET}")
-                    log(f"Erro ao processar índice {choice}: {e}")
+                    print(f"\n{RED}? Erro ao processar número: {str(e)}{RESET}")
+                    log(f"Erro ao processar ndice {choice}: {e}")
                     time.sleep(SLEEP_ONE_HALF)
             # Aceitar nome exato do arquivo (case-insensitive para maior flexibilidade)
             elif choice.lower() in [s.lower() for s in interactive_list]:
@@ -695,16 +696,16 @@ def choose_profile(interactive_list: list[str]) -> str:
                         log(f"Script selecionado por nome: {selected_profile}")
                         break
             else:
-                print(f"\n{RED}✗ Erro: Opção inválida! Digite um número válido.{RESET}")
-                log(f"Opção inválida: {choice}")
+                print(f"\n{RED}? Erro: Opção invlida! Digite um número vlido.{RESET}")
+                log(f"Opção invlida: {choice}")
                 time.sleep(SLEEP_ONE_HALF)
                 
         except KeyboardInterrupt:
-            print(f"\n\n{RED}✗ Seleção cancelada pelo usuário.{RESET}")
+            print(f"\n\n{RED}? Seleção cancelada pelo usuário.{RESET}")
             log("Seleção interrompida por Ctrl+C")
             raise SystemExit(0)
         except Exception as e:
-            print(f"\n{RED}✗ Erro inesperado: {str(e)}{RESET}")
+            print(f"\n{RED}? Erro inesperado: {str(e)}{RESET}")
             log(f"ERRO durante seleção de perfil: {e}")
             time.sleep(SLEEP_ONE_HALF)
             # Continuar o loop para tentar novamente
@@ -715,10 +716,10 @@ def choose_profile(interactive_list: list[str]) -> str:
         log(f"Número máximo de tentativas atingido ({max_attempts}); nenhum perfil selecionado.")
         raise SystemExit(1)
     
-    print(f"\n{GREEN}✓ Script selecionado: {BOLD}{selected_profile}{RESET}\n")
+    print(f"\n{GREEN}? Script selecionado: {BOLD}{selected_profile}{RESET}\n")
     print(f"{CYAN}{'=' * 60}{RESET}\n")
     
-    # Fechar/ocultar o terminal após seleção (com fallback em caso de WM_CLOSE falhar)
+    # Fechar/ocultar o terminal aps seleção (com fallback em caso de WM_CLOSE falhar)
     hide_console_window()
     
     return selected_profile
@@ -731,7 +732,7 @@ def focused_prompt(text: str = "", title: str = "", default: str = ""):
     try:
         result = pyautogui.prompt(text=text, title=title, default=default)
     finally:
-        resume_automation_timer()  # Resumir timer após prompt
+        resume_automation_timer()  # Resumir timer aps prompt
     
     return result
 
@@ -816,7 +817,7 @@ def focused_alert(text: str = "", title: str = "", button: str = "OK"):
     try:
         result = pyautogui.alert(text=text, title=title, button=button)
     finally:
-        resume_automation_timer()  # Resumir timer após alert
+        resume_automation_timer()  # Resumir timer aps alert
     
     return result
 
@@ -834,9 +835,9 @@ def focused_confirm(text: str = "", title: str = "", buttons: list[str] | None =
 
 
 def prompt_batch_info(ncm_options: list[str]) -> dict[str, str] | None:
-    """Prompt unico para CT-e, NF1/NF2 e NCM com validacoes basicas.
+    """Prompt único para CT-e, NF1/NF2 e NCM com validações básicas.
 
-    Retorna None se o usuario cancelar.
+    Retorna None se o usuário cancelar.
     """
     pause_automation_timer()
     root = tk.Tk()
@@ -845,7 +846,7 @@ def prompt_batch_info(ncm_options: list[str]) -> dict[str, str] | None:
 
     try:
         dialog = tk.Toplevel(root)
-        dialog.title("Dados para Averbação")
+        dialog.title("Dados para Averbacao")
         dialog.attributes("-topmost", True)
         dialog.resizable(False, False)
         dialog.geometry("600x560")
@@ -976,7 +977,7 @@ def ensure_caps_off() -> None:
 
 
 def _get_foreground_title() -> str:
-    """Retorna o título da janela em foco (minimiza uso de Win+1 desnecessário)."""
+    """Retorna o ttulo da janela em foco (minimiza uso de Win+1 desnecessrio)."""
     user32 = ctypes.windll.user32
     hwnd = user32.GetForegroundWindow()
     length = user32.GetWindowTextLengthW(hwnd)
@@ -1110,12 +1111,12 @@ def _find_browser_windows() -> list[int]:
 
 
 def focus_browser_if_needed() -> None:
-    """Só pressiona Win+1 se o navegador não estiver em foco, evitando minimizar."""
+    """S pressiona Win+1 se o navegador no estiver em foco, evitando minimizar."""
     browser_windows = _find_browser_windows()
     if len(browser_windows) > 1:
         focused_alert(
             "Foram detectadas multiplas janelas do navegador abertas. "
-            "Isso pode atrapalhar a automacao. A primeira janela sera utilizada.",
+            "Isso pode atrapalhar a automação. A primeira janela sera utilizada.",
             title="Aviso: Multiplas janelas do navegador"
         )
         log("Multiplas janelas detectadas; usando Win+1 para ir para a primeira.")
@@ -1126,21 +1127,21 @@ def focus_browser_if_needed() -> None:
     cls = _get_foreground_class().lower()
     process_name = _get_window_process_name(ctypes.windll.user32.GetForegroundWindow())
     if _is_browser_window(title, cls, process_name):
-        log("Navegador já em foco; Win+1 ignorado para evitar minimizar.")
+        log("Navegador j em foco; Win+1 ignorado para evitar minimizar.")
         return
 
     log("Navegador fora de foco; tentando Win+1.")
     pyautogui.hotkey("winleft", "1")
     time.sleep(SLEEP_ONE)
 
-    # Pós-checagem: se ainda não estiver em foco, tentar fallback suave
+    # Ps-checagem: se ainda no estiver em foco, tentar fallback suave
     title2 = _get_foreground_title().lower()
     cls2 = _get_foreground_class().lower()
     process_name2 = _get_window_process_name(ctypes.windll.user32.GetForegroundWindow())
     if _is_browser_window(title2, cls2, process_name2):
-        log("Navegador em foco após Win+1.")
+        log("Navegador em foco aps Win+1.")
         return
-    log("Win+1 não focou o navegador; evitando minimizar e mantendo estado.")
+    log("Win+1 no focou o navegador; evitando minimizar e mantendo estado.")
 
 
 def upload_latest_xml() -> None:
@@ -1149,20 +1150,21 @@ def upload_latest_xml() -> None:
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
     if not list_of_files:
-        focused_alert("A pasta Downloads está vazia!")
+        focused_alert("A pasta Downloads est vazia!")
         return
     latest_file = max(list_of_files, key=os.path.getctime)
     smart_write(str(latest_file), interval=0.12)
-    time.sleep(SLEEP_LONG)
+    skip_tabs(3)
+    time.sleep(SLEEP_MEDIUM)
     pyautogui.press("enter")
 
 
 
 
 def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 1.0, copy_attempts: int = 2) -> str:
-    """Aguarda o formulario abrir detectando texto via clipboard.
+    """Aguarda o formulário abrir detectando texto via clipboard.
 
-    Retorna o conteudo copiado quando o alvo e encontrado.
+    Retorna o conteúdo copiado quando o alvo é encontrado.
     """
     short_sleep = 0.12
 
@@ -1170,7 +1172,7 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
     ultimo_conteudo = ""
     target_norm = re.sub(r"\s+", " ", target_text).strip().lower()
 
-    log(f"Aguardando o formulário abrir... alvo='{target_text}', timeout={tempo_maximo}s")
+    log(f"Aguardando o formulrio abrir... alvo='{target_text}', timeout={tempo_maximo}s")
     attempt = 0
 
     while time.monotonic() - inicio < tempo_maximo:
@@ -1180,7 +1182,7 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
             try:
                 pyperclip.copy("")
             except Exception as e:
-                log(f"Aviso: não foi possível limpar clipboard: {e}")
+                log(f"Aviso: no foi possvel limpar clipboard: {e}")
 
             for _ in range(copy_attempts):
                 pyautogui.hotkey("ctrl", "a")
@@ -1206,16 +1208,16 @@ def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float
                 time.sleep(0.8)
                 return conteudo
 
-            log(f"Não encontrado. Aguardando {intervalo}s antes da próxima tentativa.")
+            log(f"No encontrado. Aguardando {intervalo}s antes da prxima tentativa.")
             time.sleep(intervalo)
 
         except Exception as e:
             log(f"Erro interno durante a tentativa: {e}")
             time.sleep(intervalo)
 
-    log(f"Formulário não foi detectado dentro de {tempo_maximo} segundos. Encerrando o processo.")
+    log(f"Formulrio no foi detectado dentro de {tempo_maximo} segundos. Encerrando o processo.")
     if ultimo_conteudo:
-        log("Último conteúdo capturado (preview):")
+        log("ltimo conteúdo capturado (preview):")
         print(ultimo_conteudo[:400])
     raise SystemExit(1)
 
@@ -1258,7 +1260,7 @@ def _click_below_edge_searchbar(offset: int = EDGE_CLICK_OFFSET) -> None:
 
 
 def _focus_page_for_copy() -> None:
-    """Garante foco no corpo da página antes de copiar (evita pegar barra de endereço)."""
+    """Garante foco no corpo da página antes de copiar (evita pegar barra de endereo)."""
     try:
         pyautogui.press("esc")
         time.sleep(0.05)
@@ -1269,7 +1271,7 @@ def _focus_page_for_copy() -> None:
 
 
 def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
-    """Copia o conteúdo da página e confirma a presença do CT-e informado."""
+    """Copia o conteúdo da página e confirma a presena do CT-e informado."""
     pyautogui.press("esc")
     time.sleep(SLEEP_SHORT)
     pyautogui.hotkey("ctrl", "1")
@@ -1299,7 +1301,7 @@ def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: fl
                 return
             if digits_cte:
                 if pattern and pattern.search(conteudo):
-                    log(f"CT-e {numero_cte} encontrado na página (match numérico).")
+                    log(f"CT-e {numero_cte} encontrado na página (match numrico).")
                     return
                 conteudo_digits = _normalize_digits(conteudo)
                 if digits_cte in conteudo_digits:
@@ -1311,16 +1313,16 @@ def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: fl
         time.sleep(intervalo)
 
     focused_alert(
-        "O número do CT-e informado não foi encontrado na página.\n\n"
-        "Verifique se o número digitado é o mesmo que aparece na tela e tente novamente.",
-        title="CT-e não encontrado"
+        "O número do CT-e informado no foi encontrado na página.\n\n"
+        "Verifique se o número digitado  o mesmo que aparece na tela e tente novamente.",
+        title="CT-e no encontrado"
     )
     raise SystemExit(1)
 
 
 def navigate_to_mdfe() -> None:
-    """Navega para o formulario MDF-e seguindo o fluxo legado ajustado."""
-    # IR PARA 3ª PAGINA - MDFE
+    """Navega para o formulário MDF-e seguindo o fluxo legado ajustado."""
+    # IR PARA 3 PAGINA - MDFE
     pyautogui.hotkey("ctrl", "3")
     time.sleep(SLEEP_ONE)
 
@@ -1355,14 +1357,14 @@ def navigate_to_mdfe() -> None:
 
 
 def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
-    """Preenche o formulario MDF-e usando valores do perfil e NCM selecionado.
+    """Preenche o formulário MDF-e usando valores do perfil e NCM selecionado.
 
-    Espera que o formulario MDF-e esteja aberto e com foco.
+    Espera que o formulário MDF-e esteja aberto e com foco.
     """
     time.sleep(SLEEP_ONE)
-    log("Iniciando preenchimento MDF-e: PRESTADOR DE SERVIÇO, EMITENTE, UF, MUNICÍPIO")
+    log("Iniciando preenchimento MDF-e: PRESTADOR DE SERVIO, EMITENTE, UF, MUNICPIO")
     
-    # PRESTADOR DE SERVIÇO
+    # PRESTADOR DE SERVIO
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
     pyautogui.hotkey("ctrl", "a")
@@ -1443,7 +1445,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     pyautogui.press("enter")
     time.sleep(SLEEP_ONE_HALF)
 
-    # UNIDADE DE MEDIDA, TIPO CARGA E DESCRIÇÃO
+    # UNIDADE DE MEDIDA, TIPO CARGA E DESCRIO
     skip_tabs(5)
     pyautogui.press("space")
     time.sleep(SLEEP_SHORT)
@@ -1468,11 +1470,11 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
 
     log(f"MDF-e: Unidade={unidade}, Tipo_Carga={carga}")
 
-    # DESCRIÇÃO DO PRODUTO
+    # DESCRIO DO PRODUTO
     pyautogui.press("tab")
     time.sleep(SLEEP_SHORT)
     descricao = profile.get_value("mdfe", "codigo_produto_descricao")
-    log(f"Preenchendo DESCRIÇÃO PRODUTO: {descricao}")
+    log(f"Preenchendo DESCRIO PRODUTO: {descricao}")
     smart_write(descricao, interval=0.1)
     time.sleep(SLEEP_SHORT)
 
@@ -1501,12 +1503,12 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     smart_write(cep_dest, interval=0.12)
     time.sleep(SLEEP_MEDIUM)
     
-    log(f"MDF-e concluído: NCM={codigo_ncm_upper}, CEP_Orig={cep_orig}, CEP_Dest={cep_dest}")
+    log(f"MDF-e concludo: NCM={codigo_ncm_upper}, CEP_Orig={cep_orig}, CEP_Dest={cep_dest}")
 
 
 def fill_modal_rodo(profile: ConfigProfile) -> None:
     """Preenche os dados do Modal Rodoviario conforme o perfil ativo."""
-    log("Iniciando preenchimento Modal Rodoviário")
+    log("Iniciando preenchimento Modal Rodovirio")
     time.sleep(SLEEP_MEDIUM)
     
     pyautogui.hotkey("ctrl", "f")
@@ -1552,17 +1554,17 @@ def fill_modal_rodo(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(SLEEP_LONG)
     
-    log(f"Modal Rodoviário: RNTRC={rntrc}, Contratante={contratante}, CNPJ={cnpj_cont}")
+    log(f"Modal Rodovirio: RNTRC={rntrc}, Contratante={contratante}, CNPJ={cnpj_cont}")
 
 
 def fill_additional_info(profile: ConfigProfile) -> None:
-    """Preenche Informacoes Adicionais (seguradora, frete, banco e parcelas)."""
+    """Preenche Informações Adicionais (seguradora, frete, banco e parcelas)."""
     log("Iniciando preenchimento Informações Adicionais")
 
     def write_additional(value: str, interval: float = 0.10, **_kwargs) -> None:
         smart_write(value, interval=interval, verify=False)
     
-    # ABRIR SEÇÃO OPCIONAIS
+    # ABRIR SEO OPCIONAIS
     pyautogui.hotkey("ctrl", "f")
     write_additional("OPCIONAIS", interval=0.10)
     skip_tabs(2)
@@ -1630,51 +1632,51 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
     # Contratante 2 e Frete
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     contratante2 = profile.get_value("modal_rodoviario", "contratante_nome")
     write_additional(contratante2, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     cnpj_cont3 = profile.get_value("modal_rodoviario", "contratante_cnpj")
     write_additional(cnpj_cont3, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     skip_tabs(2)
     frete_val = profile.get_value("informacoes_adicionais", "frete_valor")
     write_additional(frete_val, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     pyautogui.press("space")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     forma_pag = profile.get_value("informacoes_adicionais", "forma_pagamento")
     write_additional(forma_pag, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     pyautogui.press("enter")
     time.sleep(SLEEP_MEDIUM)
 
-    # Banco e Agência
+    # Banco e Agncia
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     numero_banco = profile.get_value("informacoes_adicionais", "numero_banco")
     write_additional(numero_banco, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     pyautogui.press("tab")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     agencia = profile.get_value("informacoes_adicionais", "agencia")
     write_additional(agencia, interval=0.12)
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
 
     skip_tabs(2)
     pyautogui.press("enter")
     time.sleep(SLEEP_MEDIUM)
 
-    # Seção FRETE
+    # Seo FRETE
     pyautogui.press("tab")
     time.sleep(SLEEP_SHORT)
     pyautogui.press("enter")
@@ -1706,7 +1708,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(SLEEP_SHORT)
 
-    # Seção de Parcelas
+    # Seo de Parcelas
     pyautogui.hotkey("ctrl", "f")
     write_additional("SELECIONE...", interval=0.10)
     pyautogui.press("esc")
@@ -1721,7 +1723,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
             title="Perfil inválido"
         )
         raise SystemExit(1)
-    write_additional(numero_parcelas, interval=0.10)
+    write_additional(numero_parcelas, interval=0.12)
     time.sleep(0.15)
 
     skip_tabs(2)
@@ -1757,7 +1759,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     def write_averbacao(value: str, interval: float = 0.10) -> None:
         smart_write(value, interval=interval, verify=False)
 
-    # Abrir site/aba de averbação e enviar XML
+    # Abrir site/aba de averbacao e enviar XML
     pyautogui.hotkey("ctrl", "4")
     time.sleep(SLEEP_LONG)
 
@@ -1786,15 +1788,33 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     time.sleep(SLEEP_LONG)
     texto = pyperclip.paste()
     numero_averbacao = ""
-    match = re.search(r"Número de Averbação:\s*([\d]+)", texto)
-    if match:
-        numero_averbacao = match.group(1)
-        print("Número de Averbação copiado:", numero_averbacao)
-    else:
-        print("Número de Averbação não encontrado")
+    
+    # Debug: mostrar tamanho e primeiros 200 caracteres
+    log(f"Clipboard length: {len(texto) if texto else 0}")
+    if texto:
+        log(f"Clipboard preview: {texto[:200]}")
+    
+    # Tentar múltiplos padrões para capturar variações
+    patterns = [
+        r"Número de Averbação:\s*([\d]+)",        # Padrão original com cedilha
+        r"Numero de Averbacao:\s*([\d]+)",         # Sem acentos
+        r"n.mero de Averbacao:\s*([\d]+)",         # Qualquer caractere no lugar de ú
+        r"Número\s*de\s*Averbação:\s*([\d]+)",    # Espaços variáveis
+        r"([0-9]{40,})",                            # Qualquer sequência de 40+ dígitos (é o padrão del número)
+    ]
+    
+    for pat in patterns:
+        match = re.search(pat, texto, re.IGNORECASE | re.DOTALL)
+        if match:
+            numero_averbacao = match.group(1)
+            log(f"Número de Averbação copiado (padrão {patterns.index(pat)}): {numero_averbacao}")
+            break
+    
+    if not numero_averbacao:
+        log("FALHA: Número de Averbação não encontrado com nenhum padrão")
 
     time.sleep(SLEEP_LONG)
-    pyautogui.hotkey("alt", "tab")
+    pyautogui.hotkey("ctrl", "3")
     time.sleep(SLEEP_LONGER)
 
     # Preencher detalhes na outra aba
@@ -1813,7 +1833,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         time.sleep(SLEEP_MEDIUM)
     if numero_averbacao:
         pyperclip.copy(numero_averbacao)
-        time.sleep(0.12)
+        time.sleep(0.25)
         pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_SHORT)
     pyautogui.press("tab")
@@ -1821,7 +1841,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     pyautogui.press("enter")
     time.sleep(SLEEP_MEDIUM)
 
-    # Preencher DT/CT-e/NF na área de CONTRIBUINTE
+    # Preencher DT/CT-e/NF na rea de CONTRIBUINTE
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
     write_averbacao("CONTRIBUINTE", interval=0.15)
@@ -1847,7 +1867,7 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
 
 
 def main() -> None:
-    """Fluxo principal da automacao MDF-e."""
+    """Fluxo principal da automação MDF-e."""
     global _automation_start_time, _automation_time_paused
 
     prev_failsafe = pyautogui.FAILSAFE
@@ -1879,10 +1899,10 @@ def main() -> None:
         ui_print(f"Perfil: {selected}", style="success")
         profile_path = CONFIG_DIR / selected
         if not profile_path.exists():
-            log(f"Perfil {profile_path} não encontrado.")
+            log(f"Perfil {profile_path} no encontrado.")
             try:
                 focused_alert(
-                    f"O arquivo de perfil não foi encontrado:\n{profile_path}\n\nCorrija o nome do script e tente novamente.",
+                    f"O arquivo de perfil no foi encontrado:\n{profile_path}\n\nCorrija o nome do script e tente novamente.",
                     title="Perfil ausente"
                 )
             except Exception:
@@ -1897,7 +1917,7 @@ def main() -> None:
         ui_print("Iniciando preenchimento...", style="step")
         
         # Preparar navegador e validar pagina inicial
-        # Abrir/focar navegador sem minimizar (usa Win+1 só se não estiver em foco)
+        # Abrir/focar navegador sem minimizar (usa Win+1 s se no estiver em foco)
         log("Focando navegador (evitando minimizar)")
         focus_browser_if_needed()
         pause_point()
@@ -1948,15 +1968,15 @@ def main() -> None:
         time.sleep(SLEEP_LONG)
         pause_point()
 
-        # reforçar foco no navegador antes de enviar Ctrl+F
+        # reforar foco no navegador antes de enviar Ctrl+F
         focus_browser_if_needed()
         log("Enviando Ctrl+F para abrir a busca de página")
-        # pequeno delay para garantir que o foco esteja estável
+        # pequeno delay para garantir que o foco esteja estvel
         time.sleep(0.15)
 
-        # Buscar pelo rótulo "DO DT" para posicionar o foco no campo correto
+        # Buscar pelo rtulo "DO DT" para posicionar o foco no campo correto
         # (antigo fluxo usava "serie final", mas agora o texto mudou)
-        log("Acionando busca por rótulo 'DO DT' e navegando até o campo")
+        log("Acionando busca por rtulo 'DO DT' e navegando at o campo")
         pyautogui.hotkey("ctrl", "f")
         time.sleep(SLEEP_MEDIUM)
         # limpar busca anterior
@@ -1964,7 +1984,7 @@ def main() -> None:
         time.sleep(0.3)
         pyautogui.press("backspace")
         time.sleep(0.3)
-        smart_write("DO DT", interval=0.12)
+        pyautogui.write("DO DT", interval=0.12)
         time.sleep(SLEEP_LONG)
         # confirmar busca para que o navegador posicione o cursor
         pyautogui.press("esc")
@@ -1977,7 +1997,7 @@ def main() -> None:
         log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
         pyautogui.hotkey("ctrl", "a")
         time.sleep(0.15)
-        # escrever o número manualmente para que fique visível no fluxo
+        # escrever o número manualmente para que fique visvel no fluxo
         smart_write(numero_dt.upper(), interval=0.08, verify=True)
         time.sleep(SLEEP_MEDIUM)
         pyautogui.press("enter")
@@ -1987,8 +2007,8 @@ def main() -> None:
         log("Exibindo aviso para baixar o CT-e antes de seguir")
         focused_alert(
             text=(
-                "Antes de prosseguir, faça o download do XML do CT-e correspondente \n"
-                "à DT e mantenha-o salvo. Em seguida clique em OK para continuar."
+                "Antes de prosseguir, faa o download do XML do CT-e correspondente \n"
+                " DT e mantenha-o salvo. Em seguida clique em OK para continuar."
             ),
             title="Aviso: Baixe o CT-e"
         )
@@ -2009,7 +2029,7 @@ def main() -> None:
         log("Exibindo prompt unificado para CT-e, NFs e NCM")
         batch = prompt_batch_info([ncm_primary, ncm_secondary, ncm_tertiary])
         if not batch:
-            focused_alert("Nenhuma informação foi informada. O script foi pausado.")
+            focused_alert("Nenhuma informao foi informada. O script foi pausado.")
             raise SystemExit(1)
 
         log("Garantindo foco no navegador antes de voltar para a aba 1")
@@ -2035,11 +2055,11 @@ def main() -> None:
             )
             raise SystemExit(1)
 
-        # Verificar se o CT-e informado aparece na página após inserir a DT
+        # Verificar se o CT-e informado aparece na página aps inserir a DT
         verify_cte_on_page(numero_cte)
         pause_point()
 
-        # Concatenar apenas se ambas informadas; caso contrário usar a que foi preenchida
+        # Concatenar apenas se ambas informadas; caso contrrio usar a que foi preenchida
         if nf1 and nf2:
             nf_concat = f"{nf1}/{nf2}"
         elif nf1:
@@ -2057,25 +2077,25 @@ def main() -> None:
         ensure_caps_off()
         pause_point()
 
-        ui_print("Preenchendo formulário MDF-e...", style="step")
+        ui_print("Preenchendo formulrio MDF-e...", style="step")
         
-        # Preencher formularios principais
-        # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
+        # Preencher formulários principais
+        # Navegar para MDF-e e detectar formulrio (lgica e tempos do legado)
         navigate_to_mdfe()
         wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
         pause_point()
         
-        # Preencher formulário (passando código NCM já selecionado)
+        # Preencher formulrio (passando código NCM j selecionado)
         log("Iniciando preenchimento dos dados MDF-e")
         fill_mdfe(profile, codigo_ncm)
         log("Dados MDF-e preenchidos com sucesso")
         ui_print("Dados MDF-e preenchidos", style="success")
         pause_point()
         
-        log("Iniciando preenchimento do modal rodoviário")
+        log("Iniciando preenchimento do modal rodovirio")
         fill_modal_rodo(profile)
-        log("Modal rodoviário preenchido com sucesso")
-        ui_print("Modal rodoviário preenchido", style="success")
+        log("Modal rodovirio preenchido com sucesso")
+        ui_print("Modal rodovirio preenchido", style="success")
         pause_point()
         
         log("Iniciando preenchimento de informações adicionais")
@@ -2084,10 +2104,10 @@ def main() -> None:
         ui_print("Informações adicionais preenchidas", style="success")
         pause_point()
         
-        log("Iniciando processamento de averbação")
-        ui_print("Processando averbação...", style="step")
+        log("Iniciando processamento de averbacao")
+        ui_print("Processando averbacao...", style="step")
         perform_averbacao(numero_cte, numero_dt, nf_concat)
-        log("Averbação processada com sucesso")
+        log("Averbacao processada com sucesso")
         pause_point()
         
         # Encerramento com resumo
@@ -2114,9 +2134,9 @@ def main() -> None:
         BOLD = "\033[1m"
         RESET = "\033[0m"
         
-        print(f"\n{CYAN}{'═' * 60}{RESET}")
-        print(f"{BOLD}{GREEN}  ✓ AUTOMAÇÃO CONCLUÍDA COM SUCESSO!{RESET}")
-        print(f"{CYAN}{'═' * 60}{RESET}\n")
+        print(f"\n{CYAN}{'-' * 60}{RESET}")
+        print(f"{BOLD}{GREEN}  ? AUTOMAÇÃO CONCLUÍDA COM SUCESSO!{RESET}")
+        print(f"{CYAN}{'-' * 60}{RESET}\n")
         print(f"{BOLD}Resumo das Informações:{RESET}\n")
         print(f"  {YELLOW}DT:{RESET}      {numero_dt}")
         print(f"  {YELLOW}CT-e:{RESET}    {numero_cte if numero_cte else 'Não capturado'}")
@@ -2125,24 +2145,24 @@ def main() -> None:
         print(f"\n{BOLD}Tempo de Execução:{RESET}\n")
         print(f"  {YELLOW}Tempo de Automação:{RESET}  {format_duration(automation_duration)} (apenas automação)")
         print(f"  {YELLOW}Tempo Real:{RESET}          {format_duration(real_duration)} (incluindo prompts)")
-        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"\n{CYAN}{'-' * 60}{RESET}")
         print(f"{BOLD}Próximos passos:{RESET}")
-        print(f"  • Preencha os dados do motorista")
-        print(f"\n{CYAN}{'═' * 60}{RESET}\n")
+        print(f"   Preencha os dados do motorista")
+        print(f"\n{CYAN}{'-' * 60}{RESET}\n")
         
         # Pausar 3 segundos para permitir leitura do resumo
         time.sleep(3)
         
         log(f"Automação finalizada com sucesso - Tempo automação: {format_duration(automation_duration)}, Tempo real: {format_duration(real_duration)}")
-        log("═" * 60)
+        log("-" * 60)
         log(f"Resumo final: DT={numero_dt}, CT-e={numero_cte if numero_cte else 'Não capturado'}, NCM={codigo_ncm}, NF={nf_concat if nf_concat else 'Não informado'}")
-        log("═" * 60)
+        log("-" * 60)
     except SystemExit as e:
-        # Capturar saídas como exit code 99 (menu), 1 (erro), etc
+        # Capturar sadas como exit code 99 (menu), 1 (erro), etc
         if e.code == 99:
             log("Programa finalizado - usuário retornou ao menu (código 99)")
         else:
-            log(f"Programa finalizado com código de saída: {e.code}")
+            log(f"Programa finalizado com código de sada: {e.code}")
         raise
     except Exception as e:
         import traceback
