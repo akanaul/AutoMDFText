@@ -1862,6 +1862,11 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     time.sleep(SLEEP_SHORT)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_LONG)
+    
+    # Retornar à aba 3 após averbação completar
+    log("Retornando à aba 3 após averbação")
+    pyautogui.hotkey("ctrl", "3")
+    time.sleep(SLEEP_LONG)
 
 
 def main() -> None:
