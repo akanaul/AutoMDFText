@@ -1811,9 +1811,10 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     if not numero_averbacao:
         log("FALHA: Número de Averbação não encontrado com nenhum padrão")
 
+    # Retornar à aba 3 após averbação completar
+    log("Retornando à aba 3 após averbação")
+    pyautogui.hotkey("ctrl", "3")
     time.sleep(SLEEP_LONG)
-    pyautogui.hotkey("alt", "tab")
-    time.sleep(SLEEP_LONGER)
 
     # Preencher detalhes na outra aba
     pyautogui.hotkey("ctrl", "home")
@@ -1863,10 +1864,6 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_LONG)
     
-    # Retornar à aba 3 após averbação completar
-    log("Retornando à aba 3 após averbação")
-    pyautogui.hotkey("ctrl", "3")
-    time.sleep(SLEEP_LONG)
 
 
 def main() -> None:
