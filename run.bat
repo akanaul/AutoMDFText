@@ -22,7 +22,7 @@ if exist "%VENV_PY%" (
         goto :EOF
     )
     echo Criando .venv local para o AutoMDFText...
-    %BASE_PY% -m venv "%VENV_DIR%"
+    "%BASE_PY%" -m venv "%VENV_DIR%"
     if errorlevel 1 (
         echo Falha ao criar a .venv. Verifique sua instalacao do Python.
         pause
@@ -57,8 +57,8 @@ if %CHOICE_RESULT%==1 goto modular
 
 :install
 echo Instalando pacotes Python necessarios...^ (pyautogui pyperclip Pillow pywin32 pynput^)
-%PYTHON% -m pip install --upgrade pip >nul
-%PYTHON% -m pip install pyautogui pyperclip Pillow pywin32 pynput >nul
+    "%PYTHON%" -m pip install --upgrade pip >nul
+    "%PYTHON%" -m pip install pyautogui pyperclip Pillow pywin32 pynput >nul
 if errorlevel 1 (
     echo Falha na instalacao, verifique a saida acima.
     pause
@@ -73,12 +73,12 @@ echo Executando o preenchimento modular do MDF-e. Pressione Ctrl+C para abortar.
 REM Guard before launching, ensure no existing automation is running
 powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $p = Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match 'modular_mdfe\.py' }; if ($p) { Write-Host 'Automação já em execução. Retornando ao menu...'; exit 1 } else { exit 0 } } catch { exit 0 }"
 IF ERRORLEVEL 1 goto prompt
-%PYTHON% modular_mdfe.py
+"%PYTHON%" modular_mdfe.py
 REM Check if user requested to return to menu (exit code 99)
 IF ERRORLEVEL 99 goto prompt
 goto modular
 
 :editor
 echo Abrindo o editor de perfis.
-%PYTHON% script_editor.py
+"%PYTHON%" script_editor.py
 goto prompt

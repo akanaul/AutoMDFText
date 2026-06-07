@@ -10,6 +10,8 @@ import argparse
 import ctypes
 import os
 import re
+import sys
+import subprocess
 import tkinter as tk
 from tkinter import messagebox
 import time
@@ -19,6 +21,15 @@ from pathlib import Path
 import pyautogui
 import pyperclip
 
+# Importar constantes centralizadas
+from constants import (
+    TAB_DELAY, TAB_DELAY_LONG, CTRL_F_DELAY, DROPDOWN_SETTLE_DELAY,
+    SLEEP_SHORT, SLEEP_MEDIUM, SLEEP_LONG, SLEEP_LONGER, SLEEP_ONE, SLEEP_ONE_HALF,
+    FORM_WAIT_TIMEOUT, FORM_WAIT_INTERVAL, FORM_COPY_ATTEMPTS, VERIFY_FIELD_TIMEOUT,
+    EDGE_SEARCHBAR_HEIGHT, EDGE_CLICK_OFFSET, MIN_PASTE_LENGTH, WRITE_INTERVAL,
+    LOG_TIMESTAMP_FORMAT, LOG_MESSAGE_FORMAT, MUTEX_NAME
+)
+
 pyautogui.FAILSAFE = True
 
 BASE_DIR = Path(__file__).parent
@@ -27,19 +38,8 @@ LOG_DIR = BASE_DIR / "logs"
 CONFIG_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
 # Log por sessao (timestamp) para facilitar debug
-SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+SESSION_TS = time.strftime(LOG_TIMESTAMP_FORMAT, time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
-
-TAB_DELAY = 0.10
-TAB_DELAY_LONG = 0.25
-CTRL_F_DELAY = 0.2
-DROPDOWN_SETTLE_DELAY = 0.4
-SLEEP_SHORT = 0.15
-SLEEP_MEDIUM = 0.25
-SLEEP_LONG = 0.40
-SLEEP_LONGER = 0.7
-SLEEP_ONE = 1.0
-SLEEP_ONE_HALF = 1.5
 # Handle for single-instance mutex to keep it alive during process lifetime
 _SINGLETON_MUTEX_HANDLE = None
 
@@ -61,7 +61,7 @@ def _normalize_text(value: str) -> str:
 
 def log(msg: str) -> None:
     """Registra mensagem apenas no arquivo de log, sem imprimir no console."""
-    ts = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+    ts = time.strftime(LOG_MESSAGE_FORMAT, time.localtime())
     line = f"[{ts}] {msg}"
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -567,7 +567,7 @@ def play_low_beep() -> None:
         pass
 
 
-def ensure_single_instance(name: str = "Global\\AutoMDFText_Mutex", on_duplicate: str = "warn") -> None:
+def ensure_single_instance(name: str = MUTEX_NAME, on_duplicate: str = "warn") -> None:
     """Impede execução duplicada usando um Mutex nomeado do Windows.
     Se já existir outra instância:
     - on_duplicate == 'warn': exibe alerta e encerra este processo
@@ -1151,7 +1151,7 @@ def upload_latest_xml() -> None:
 
 
 
-def wait_for_form(target_text: str, tempo_maximo: float = 15.0, intervalo: float = 1.0, copy_attempts: int = 2) -> str:
+def wait_for_form(target_text: str, tempo_maximo: float = FORM_WAIT_TIMEOUT, intervalo: float = FORM_WAIT_INTERVAL, copy_attempts: int = FORM_COPY_ATTEMPTS) -> str:
     """Aguarda o formulario abrir detectando texto via clipboard.
 
     Retorna o conteudo copiado quando o alvo e encontrado.
@@ -1216,10 +1216,6 @@ def _normalize_digits(value: str) -> str:
     return re.sub(r"\D", "", value or "")
 
 
-EDGE_SEARCHBAR_HEIGHT = 70
-EDGE_CLICK_OFFSET = 200
-
-
 def _click_below_edge_searchbar(offset: int = EDGE_CLICK_OFFSET) -> None:
     """Clica ~50px abaixo da barra de pesquisa do Edge para focar o conteúdo."""
     if os.name != "nt":
@@ -1260,7 +1256,7 @@ def _focus_page_for_copy() -> None:
         pass
 
 
-def verify_cte_on_page(numero_cte: str, tempo_maximo: float = 6.0, intervalo: float = 1.0) -> None:
+def verify_cte_on_page(numero_cte: str, tempo_maximo: float = VERIFY_FIELD_TIMEOUT, intervalo: float = FORM_WAIT_INTERVAL) -> None:
     """Copia o conteúdo da página e confirma a presença do CT-e informado."""
     pyautogui.press("esc")
     time.sleep(SLEEP_SHORT)
@@ -2053,7 +2049,7 @@ def main() -> None:
         # Preencher formularios principais
         # Navegar para MDF-e e detectar formulário (lógica e tempos do legado)
         navigate_to_mdfe()
-        wait_for_form("Emissor MDF-e", tempo_maximo=15.0, intervalo=3.0, copy_attempts=3)
+        wait_for_form("Emissor MDF-e", tempo_maximo=FORM_WAIT_TIMEOUT, intervalo=3.0, copy_attempts=FORM_COPY_ATTEMPTS)
         pause_point()
         
         # Preencher formulário (passando código NCM já selecionado)
@@ -2128,6 +2124,51 @@ def main() -> None:
         log("═" * 60)
         log(f"Resumo final: DT={numero_dt}, CT-e={numero_cte if numero_cte else 'Não capturado'}, NCM={codigo_ncm}, NF={nf_concat if nf_concat else 'Não informado'}")
         log("═" * 60)
+        
+        # Perguntar ao usuário se deseja preencher o CIOT
+        log("Perguntando ao usuário sobre preenchimento de CIOT")
+        ciot_buttons = ["Sim, preencher CIOT", "Não, encerrar"]
+        ciot_choice = focused_confirm(
+            text=(
+                "Deseja preencher o campo CIOT (Conhecimento de Transporte Intermodal Operacional) agora?\n\n"
+                "Clique em 'Sim' para abrir a extensão de preenchimento ou 'Não' para encerrar."
+            ),
+            title="Preencher CIOT?",
+            buttons=ciot_buttons
+        )
+        
+        if ciot_choice == 1:  # Sim, preencher CIOT
+            log("Usuário escolheu preencher CIOT - chamando script ciot_filler.py")
+            ui_print("Abrindo extensão CIOT...", style="step")
+            time.sleep(SLEEP_MEDIUM)
+            
+            try:
+                import subprocess
+                ciot_script_path = BASE_DIR / "ciot_filler.py"
+                if ciot_script_path.exists():
+                    # Executar o script CIOT na mesma ambiente Python/venv
+                    log(f"Executando: {ciot_script_path}")
+                    result = subprocess.run(
+                        [str(sys.executable), str(ciot_script_path)],
+                        capture_output=False,
+                        cwd=str(BASE_DIR)
+                    )
+                    log(f"Script CIOT finalizado com código: {result.returncode}")
+                    ui_print("Extensão CIOT finalizada", style="success")
+                else:
+                    log(f"Script CIOT não encontrado: {ciot_script_path}")
+                    focused_alert(
+                        f"O script de preenchimento de CIOT não foi encontrado:\n{ciot_script_path}",
+                        title="Arquivo não encontrado"
+                    )
+            except Exception as e:
+                log(f"Erro ao executar script CIOT: {e}")
+                focused_alert(
+                    f"Erro ao executar a extensão CIOT:\n{str(e)}",
+                    title="Erro na extensão"
+                )
+        else:
+            log("Usuário escolheu não preencher CIOT - encerrando automação principal")
     except SystemExit as e:
         # Capturar saídas como exit code 99 (menu), 1 (erro), etc
         if e.code == 99:
