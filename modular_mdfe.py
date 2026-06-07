@@ -1,9 +1,11 @@
-﻿"""Automação MDF-e com seleção de perfil, prompts gui e preenchimento via teclado.
+﻿#GAPS CORRIDOS RAFAEL 24/03
 
-Inclui failsafe (F8), pausa (F9) e validações de tela para reduzir erros de
-preenchimento em formulários do navegador.
+"""Automacao MDF-e com selecao de perfil, prompts gui e preenchimento via teclado.
+
+Inclui failsafe (F8) e validacoes de tela para reduzir erros de preenchimento em
+formularios do navegador.
 """
-
+#IMPOTAR BIBLIOTECAS
 import argparse
 import ctypes
 import os
@@ -28,12 +30,12 @@ LOG_DIR.mkdir(exist_ok=True)
 SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 
-TAB_DELAY = 0.25
-TAB_DELAY_LONG = 0.50
-CTRL_F_DELAY = 0.25
+TAB_DELAY = 0.10
+TAB_DELAY_LONG = 0.25
+CTRL_F_DELAY = 0.2
 DROPDOWN_SETTLE_DELAY = 0.4
-SLEEP_SHORT = 0.20
-SLEEP_MEDIUM = 0.30
+SLEEP_SHORT = 0.15
+SLEEP_MEDIUM = 0.25
 SLEEP_LONG = 0.40
 SLEEP_LONGER = 0.7
 SLEEP_ONE = 1.0
@@ -103,7 +105,7 @@ def start_failsafe_f8() -> None:
     try:
         from pynput import keyboard
     except Exception as exc:
-        log(f"Aviso: pynput não disponível; failsafe F8 desativado ({exc})")
+        log(f"Aviso: pynput nao disponivel; failsafe F8 desativado ({exc})")
         return
 
     injected = {"value": False}
@@ -119,8 +121,8 @@ def start_failsafe_f8() -> None:
         try:
             ctypes.windll.user32.MessageBoxW(
                 0,
-                "A automação foi encerrada pelo botão de segurança (F8).",
-                "Automação encerrada",
+                "A automacao foi encerrada pelo botao de seguranca (F8).",
+                "Automacao encerrada",
                 0x00000040 | 0x00040000 | 0x00010000,
             )
         except Exception:
@@ -130,7 +132,7 @@ def start_failsafe_f8() -> None:
         if injected["value"]:
             return
         if key == keyboard.Key.f8:
-            log("Failsafe F8 acionado. Encerrando automação.")
+            log("Failsafe F8 acionado. Encerrando automacao.")
             show_failsafe_alert()
             os._exit(1)
         if key == keyboard.Key.f9:
@@ -197,20 +199,10 @@ def resume_automation_timer() -> None:
     log(f"[DEBUG PAUSE] Resuming timer. Total paused so far: {_automation_time_paused}s")
 
 
-def request_pause() -> None:
-    """Marca a automação para pausar na próxima verificação segura."""
-    global _pause_requested
-    with _pause_lock:
-        if _pause_requested or _pause_active:
-            return
-        _pause_requested = True
-    log("Pausa solicitada (F9). Aguardando ponto seguro para pausar...")
-
-
 def show_pause_dialog() -> str:
     """Exibe um dialogo topmost de pausa sem roubar foco.
 
-    Retorna "resume" para continuar ou "cancel" para encerrar a automação.
+    Retorna "resume" para continuar ou "cancel" para encerrar a automacao.
     """
     root = tk.Tk()
     root.withdraw()
@@ -218,7 +210,7 @@ def show_pause_dialog() -> str:
     result = {"value": "resume"}
 
     dialog = tk.Toplevel(root)
-    dialog.title("Automação pausada")
+    dialog.title("Automacao pausada")
     dialog.attributes("-topmost", True)
     dialog.resizable(False, False)
     dialog.geometry("460x360")
@@ -257,7 +249,7 @@ def show_pause_dialog() -> str:
     tk.Label(
         frame,
         text=(
-            "A automação está pausada.\n\n"
+            "A automacao esta pausada.\n\n"
             "Clique em Retomar para continuar ou em Cancelar para encerrar."
         ),
         font=font_label,
@@ -278,7 +270,7 @@ def show_pause_dialog() -> str:
 
     resume_button = tk.Button(button_frame, text="Retomar", command=on_resume, width=10, font=font_button)
     resume_button.pack(side="right", padx=(6, 0))
-    cancel_button = tk.Button(button_frame, text="Cancelar automação", command=on_cancel, width=18, font=font_button)
+    cancel_button = tk.Button(button_frame, text="Cancelar automacao", command=on_cancel, width=18, font=font_button)
     cancel_button.pack(side="right")
 
     dialog.protocol("WM_DELETE_WINDOW", on_cancel)
@@ -305,14 +297,14 @@ def show_pause_dialog() -> str:
 
 
 def check_pause() -> None:
-    """Pausa em ponto seguro e valida o último campo digitado antes de bloquear."""
+    """Pausa em ponto seguro e valida o ultimo campo digitado antes de bloquear."""
     global _pause_requested, _pause_active
     if not _pause_requested or _pause_active:
         return
 
     _pause_active = True
     pause_automation_timer()
-    log("Automação pausada pelo usuário.")
+    log("Automacao pausada pelo usuario.")
     _verify_last_write_before_pause()
     try:
         decision = show_pause_dialog()
@@ -320,13 +312,13 @@ def check_pause() -> None:
         _pause_active = False
 
     if decision == "cancel":
-        log("Automação cancelada pelo usuário durante a pausa.")
+        log("Automacao cancelada pelo usuario durante a pausa.")
         raise SystemExit(1)
 
     with _pause_lock:
         _pause_requested = False
     resume_automation_timer()
-    log("Automação retomada pelo usuário.")
+    log("Automacao retomada pelo usuario.")
 
 
 def pause_point() -> None:
@@ -437,13 +429,13 @@ def paste_text(
 
 def smart_write(
     value: str,
-    interval: float = 0.12,
-    min_paste_len: int = 6,
+    interval: float = 0.10,
+    min_paste_len: int = 4,
     verify: bool = True,
 ) -> None:
     """Escolhe entre digitar e colar, com verificação opcional.
 
-    Desativa a verificação para CPF/CNPJ (11/14 dígitos) por formatação automática.
+    Desativa a verificacao para CPF/CNPJ (11/14 digitos) por formatacao automatica.
     """
     global _last_write_value, _last_write_verify
     pause_point()
@@ -1145,7 +1137,7 @@ def focus_browser_if_needed() -> None:
 
 def upload_latest_xml() -> None:
     """Seleciona o arquivo mais recente em Downloads e confirma o upload."""
-    time.sleep(SLEEP_LONG)
+    time.sleep(SLEEP_MEDIUM)
     downloads_path = Path.home() / "Downloads"
     list_of_files = list(downloads_path.glob("*"))
     if not list_of_files:
@@ -1153,7 +1145,7 @@ def upload_latest_xml() -> None:
         return
     latest_file = max(list_of_files, key=os.path.getctime)
     smart_write(str(latest_file), interval=0.12)
-    time.sleep(SLEEP_LONG)
+    time.sleep(SLEEP_MEDIUM)
     pyautogui.press("enter")
 
 
@@ -1326,12 +1318,7 @@ def navigate_to_mdfe() -> None:
 
     # ABRIR DADOS DO MDF-E
     pyautogui.hotkey("ctrl", "f")
-    time.sleep(SLEEP_LONG)
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(SLEEP_SHORT)  # Seleciona tudo
-    pyautogui.press("delete")         # Apaga o campo
-    pyautogui.press("home")
-    time.sleep(SLEEP_SHORT)
+    time.sleep(SLEEP_MEDIUM)
     log("Procurando por 'EMITIR NOTA'")
     smart_write("EMITIR NOTA", interval=0.10)
     time.sleep(SLEEP_MEDIUM)
@@ -1342,9 +1329,6 @@ def navigate_to_mdfe() -> None:
     
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
-    pyautogui.hotkey("ctrl", "a")  # Seleciona tudo
-    time.sleep(SLEEP_SHORT)
-    pyautogui.press("delete")         # Apaga o campo
     log("Procurando por 'MDF-E'")
     smart_write("MDF-E", interval=0.10)
     time.sleep(SLEEP_MEDIUM)
@@ -1365,9 +1349,6 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
     # PRESTADOR DE SERVIÇO
     pyautogui.hotkey("ctrl", "f")
     time.sleep(SLEEP_MEDIUM)
-    pyautogui.hotkey("ctrl", "a")
-    time.sleep(SLEEP_SHORT)  # Seleciona tudo
-    pyautogui.press("delete")         # Apaga o campo
     smart_write("SELECIONE...", interval=0.20)
     time.sleep(SLEEP_SHORT)
     pyautogui.press("esc")
@@ -1433,7 +1414,7 @@ def fill_mdfe(profile: ConfigProfile, codigo_ncm: str) -> None:
         pyautogui.press("tab")
         time.sleep(SLEEP_SHORT)
     pyautogui.press("space")
-    time.sleep(SLEEP_ONE)
+    time.sleep(SLEEP_ONE_HALF)
     log("Carregando arquivo XML...")
     upload_latest_xml()
     time.sleep(SLEEP_LONG)
@@ -1624,7 +1605,7 @@ def fill_additional_info(profile: ConfigProfile) -> None:
     pyautogui.press("enter")
     time.sleep(SLEEP_MEDIUM)
 
-    skip_tabs(4)
+    skip_tabs(3)
     pyautogui.press("space")
     time.sleep(SLEEP_SHORT)
 
@@ -1750,9 +1731,9 @@ def fill_additional_info(profile: ConfigProfile) -> None:
 
 
 def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str = "") -> None:
-    """Executa a averbação, extrai o número e preenche a área de contribuinte.
+    """Executa a averbacao, extrai o numero e preenche a area de contribuinte.
 
-    Assume que a aba de averbação e a aba do sistema estão abertas.
+    Assume que a aba de averbacao e a aba do sistema estao abertas.
     """
     def write_averbacao(value: str, interval: float = 0.10) -> None:
         smart_write(value, interval=interval, verify=False)
@@ -1774,10 +1755,10 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
         pyautogui.press("esc")
         time.sleep(SLEEP_SHORT)
         pyautogui.press("enter")
-        time.sleep(SLEEP_ONE)
+        time.sleep(2.5)
 
     upload_latest_xml()
-    time.sleep(2)
+    time.sleep(2.5)
 
     # Extrair número de averbação e copiar apenas os dígitos
     pyautogui.hotkey("ctrl", "a")
@@ -1786,35 +1767,16 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     time.sleep(SLEEP_LONG)
     texto = pyperclip.paste()
     numero_averbacao = ""
-    
-    # Debug: mostrar tamanho e primeiros caracteres
-    log(f"Clipboard length: {len(texto) if texto else 0}")
-    if texto:
-        log(f"Clipboard preview: {texto[:200]}")
-    
-    # Tentar múltiplos padrões para capturar variações
-    patterns = [
-        r"Número de Averbação:\s*([\d]+)",        # Padrão original com cedilha
-        r"Numero de Averbacao:\s*([\d]+)",         # Sem acentos (fallback)
-        r"n.mero de Averbacao:\s*([\d]+)",         # Qualquer caractere no lugar de ú (fallback)
-        r"Número\s+de\s+Averbação:\s+([\d]+)",    # Espaços variáveis
-        r"([0-9]{40,})",                            # Qualquer sequência de 40+ dígitos (padrão do número)
-    ]
-    
-    for pat in patterns:
-        match = re.search(pat, texto, re.IGNORECASE | re.DOTALL)
-        if match:
-            numero_averbacao = match.group(1)
-            log(f"Número de Averbação copiado (padrão {patterns.index(pat)}): {numero_averbacao}")
-            break
-    
-    if not numero_averbacao:
-        log("FALHA: Número de Averbação não encontrado com nenhum padrão")
+    match = re.search(r"Número de Averbação:\s*([\d]+)", texto)
+    if match:
+        numero_averbacao = match.group(1)
+        print("Número de Averbação copiado:", numero_averbacao)
+    else:
+        print("Número de Averbação não encontrado")
 
-    # Retornar à aba 3 após averbação completar
-    log("Retornando à aba 3 após averbação")
-    pyautogui.hotkey("ctrl", "3")
     time.sleep(SLEEP_LONG)
+    pyautogui.hotkey("CTRL", "3")
+    time.sleep(0.7)
 
     # Preencher detalhes na outra aba
     pyautogui.hotkey("ctrl", "home")
@@ -1863,7 +1825,6 @@ def perform_averbacao(numero_cte: str = "", numero_dt: str = "", nf_concat: str 
     time.sleep(SLEEP_SHORT)
     pyautogui.hotkey("ctrl", "v")
     time.sleep(SLEEP_LONG)
-    
 
 
 def main() -> None:
@@ -1968,28 +1929,18 @@ def main() -> None:
         time.sleep(SLEEP_LONG)
         pause_point()
 
-        # reforçar foco no navegador antes de enviar Ctrl+F
-        focus_browser_if_needed()
-        log("Enviando Ctrl+F para abrir a busca de página")
-        # pequeno delay para garantir que o foco esteja estável
-        time.sleep(0.15)
-
-        # Buscar pelo rótulo "DO DT" para posicionar o foco no campo correto
-        # (antigo fluxo usava "serie final", mas agora o texto mudou)
-        log("Acionando busca por rótulo 'DO DT' e navegando até o campo")
+        # Posicionar em "serie final" e Tab 2x
+        log("Posicionando em 'serie final' e tabulando")
         pyautogui.hotkey("ctrl", "f")
-        time.sleep(SLEEP_MEDIUM)
-        # limpar busca anterior
+        time.sleep(1)
         pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.3)
+        time.sleep(0.15)
         pyautogui.press("backspace")
-        time.sleep(0.3)
+        time.sleep(0.15)
         smart_write("DO DT", interval=0.12)
-        time.sleep(SLEEP_LONG)
-        # confirmar busca para que o navegador posicione o cursor
+        time.sleep(SLEEP_MEDIUM)
         pyautogui.press("esc")
-        time.sleep(SLEEP_LONGER)
-        # dois tabs levam ao campo onde o número da DT deve ser preenchido
+        time.sleep(SLEEP_LONG)
         pyautogui.press("tab")
         time.sleep(SLEEP_LONG)
         
@@ -1997,8 +1948,32 @@ def main() -> None:
         log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
         pyautogui.hotkey("ctrl", "a")
         time.sleep(0.15)
-        # escrever o número manualmente para que fique visível no fluxo
-        smart_write(numero_dt.upper(), interval=0.08, verify=True)
+        paste_text(numero_dt.upper(), verify=True)
+        time.sleep(SLEEP_MEDIUM)
+        pyautogui.press("enter")
+        time.sleep(SLEEP_LONG)
+
+	#GAP_CTRL+F
+	# Posicionar em "serie final" e Tab 2x
+        log("Posicionando em 'serie final' e tabulando")
+        pyautogui.hotkey("ctrl", "f")
+        time.sleep(1)
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.15)
+        pyautogui.press("backspace")
+        time.sleep(0.15)
+        smart_write("mero do DT", interval=0.12)
+        time.sleep(SLEEP_MEDIUM)
+        pyautogui.press("esc")
+        time.sleep(SLEEP_LONG)
+        pyautogui.press("tab")
+        time.sleep(SLEEP_LONG)
+        
+        # Usar o DT armazenado previamente
+        log(f"Preenchendo campo DT com valor armazenado: {numero_dt}")
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.15)
+        paste_text(numero_dt.upper(), verify=True)
         time.sleep(SLEEP_MEDIUM)
         pyautogui.press("enter")
         time.sleep(SLEEP_LONG)
@@ -2032,10 +2007,6 @@ def main() -> None:
             focused_alert("Nenhuma informação foi informada. O script foi pausado.")
             raise SystemExit(1)
 
-        log("Garantindo foco no navegador antes de voltar para a aba 1")
-        focus_browser_if_needed()
-        # aguardar um instante para que a janela ganhe foco
-        time.sleep(0.15)
         log("Focando a primeira aba do navegador (Ctrl+1) apos o prompt de dados")
         pyautogui.hotkey("ctrl", "1")
         time.sleep(SLEEP_LONG)
