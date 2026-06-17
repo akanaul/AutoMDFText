@@ -1,4 +1,4 @@
-﻿#GAPS CORRIDOS RAFAEL 24/03
+#GAPS CORRIDOS RAFAEL 24/03
 
 """Automacao MDF-e com selecao de perfil, prompts gui e preenchimento via teclado.
 
@@ -30,6 +30,29 @@ from constants import (
     LOG_TIMESTAMP_FORMAT, LOG_MESSAGE_FORMAT, MUTEX_NAME
 )
 
+# ── Módulos extraídos (Parte 3) ───────────────────────────────────────────────
+from mdfe.logger import log, ui_print, start_automation_session
+from mdfe.timing import (
+    pause_automation_timer, resume_automation_timer, format_duration,
+    _automation_start_time, _automation_time_paused, _pause_start_time,
+)
+import mdfe.timing as _timing
+from mdfe.failsafe import start_failsafe_f8, stop_failsafe_f8, request_pause
+import mdfe.failsafe as _failsafe
+from mdfe.console import hide_console_window, restore_console_popup, play_low_beep
+from mdfe.instance import ensure_single_instance
+from mdfe.pause import show_pause_dialog, check_pause, pause_point
+from mdfe.profile import parse_profile, ConfigProfile, list_profiles
+from mdfe.dialogs import (
+    focused_alert, focused_confirm, focused_prompt,
+    prompt_dt_blocking, prompt_batch_info,
+)
+from mdfe.keyboard import (
+    _normalize_text, _normalize_digits, paste_text, smart_write,
+    press_tab, skip_tabs, ensure_caps_off, upload_latest_xml,
+    _last_write_value, _last_write_verify,
+)
+
 pyautogui.FAILSAFE = True
 
 BASE_DIR = Path(__file__).parent
@@ -41,555 +64,36 @@ LOG_DIR.mkdir(exist_ok=True)
 SESSION_TS = time.strftime(LOG_TIMESTAMP_FORMAT, time.localtime())
 LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
 # Handle for single-instance mutex to keep it alive during process lifetime
-_SINGLETON_MUTEX_HANDLE = None
+# (gerenciado por mdfe.instance._SINGLETON_MUTEX_HANDLE)
 
-# Variáveis de tracking de tempo
-_automation_start_time = 0.0
-_automation_time_paused = 0.0
-_pause_start_time = 0.0
-_failsafe_listener = None
-_pause_requested = False
-_pause_active = False
-_pause_lock = threading.Lock()
-_last_write_value = None
-_last_write_verify = False
+# Estado de tempo — gerenciado por mdfe.timing
+# Estado de failsafe/pausa — gerenciado por mdfe.failsafe
+# Estado do último smart_write — gerenciado por mdfe.keyboard
+_pause_lock = _failsafe._pause_lock
 
 
-def _normalize_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value or "").strip()
+# _normalize_text → mdfe.keyboard._normalize_text (importado acima)
 
 
-def log(msg: str) -> None:
-    """Registra mensagem apenas no arquivo de log, sem imprimir no console."""
-    ts = time.strftime(LOG_MESSAGE_FORMAT, time.localtime())
-    line = f"[{ts}] {msg}"
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception:
-        # Não interromper fluxo por falha de log em disco
-        pass
+# log, start_automation_session → mdfe.logger (importado acima)
 
 
-def start_automation_session(selected: str, profile_path: Path) -> float:
-    """Cria um novo log de sessao e reinicia os contadores de tempo.
+# start_failsafe_f8, stop_failsafe_f8, request_pause → mdfe.failsafe (importado acima)
+# ui_print → mdfe.logger (importado acima)
+# pause_automation_timer, resume_automation_timer → mdfe.timing (importado acima)
 
-    Retorna o instante monotonic para calculo do tempo total.
-    """
-    global LOG_FILE, SESSION_TS, _automation_start_time, _automation_time_paused
 
-    SESSION_TS = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-    LOG_FILE = LOG_DIR / f"automation_{SESSION_TS}.log"
+# show_pause_dialog, check_pause, pause_point → mdfe.pause (importado acima)
+# format_duration → mdfe.timing (importado acima)
+# _verify_last_write_before_pause → mdfe.pause (importado acima)
 
-    real_start_time = time.monotonic()
-    _automation_start_time = time.monotonic()
-    _automation_time_paused = 0.0
+# skip_tabs, press_tab, paste_text, smart_write, check_pause, pause_point,
+# _verify_last_write_before_pause, format_duration → mdfe.* (importados acima)
 
-    log("Iniciando automação (main)")
-    log(f"[DEBUG] real_start_time={real_start_time}")
-    log(f"Perfil selecionado: {selected}")
-    log(f"Perfil carregado com sucesso de: {profile_path}")
-    log(f"[DEBUG] _automation_start_time iniciado após escolha do perfil: {_automation_start_time}")
 
-    return real_start_time
-
-
-def start_failsafe_f8() -> None:
-    """Inicia listener global para F8 (encerrar) e F9 (pausar).
-
-    Em Windows, ignora eventos injetados para aceitar apenas teclado fisico.
-    """
-    global _failsafe_listener
-    if _failsafe_listener is not None:
-        return
-    try:
-        from pynput import keyboard
-    except Exception as exc:
-        log(f"Aviso: pynput nao disponivel; failsafe F8 desativado ({exc})")
-        return
-
-    injected = {"value": False}
-
-    def win32_event_filter(_msg, data):
-        flags = getattr(data, "flags", 0)
-        injected["value"] = bool(flags & 0x10)
-        return True
-
-    def show_failsafe_alert() -> None:
-        if os.name != "nt":
-            return
-        try:
-            ctypes.windll.user32.MessageBoxW(
-                0,
-                "A automacao foi encerrada pelo botao de seguranca (F8).",
-                "Automacao encerrada",
-                0x00000040 | 0x00040000 | 0x00010000,
-            )
-        except Exception:
-            pass
-
-    def on_press(key) -> None:
-        if injected["value"]:
-            return
-        if key == keyboard.Key.f8:
-            log("Failsafe F8 acionado. Encerrando automacao.")
-            show_failsafe_alert()
-            os._exit(1)
-        if key == keyboard.Key.f9:
-            request_pause()
-
-    listener_kwargs = {"on_press": on_press}
-    if os.name == "nt":
-        listener_kwargs["win32_event_filter"] = win32_event_filter
-    _failsafe_listener = keyboard.Listener(**listener_kwargs)
-    _failsafe_listener.start()
-
-
-def stop_failsafe_f8() -> None:
-    """Finaliza o listener de failsafe por F8, se ativo."""
-    global _failsafe_listener
-    if _failsafe_listener is None:
-        return
-    try:
-        _failsafe_listener.stop()
-    except Exception:
-        pass
-    _failsafe_listener = None
-
-
-def ui_print(msg: str, style: str = "info") -> None:
-    """Imprime mensagem formatada no console estilo GUI."""
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    BLUE = "\033[94m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
-    
-    if style == "success":
-        print(f"{GREEN}✓{RESET} {msg}")
-    elif style == "error":
-        print(f"{RED}✗{RESET} {msg}")
-    elif style == "warning":
-        print(f"{YELLOW}⚠{RESET} {msg}")
-    elif style == "step":
-        print(f"{BLUE}▸{RESET} {msg}")
-    elif style == "header":
-        print(f"\n{CYAN}{'═' * 60}{RESET}")
-        print(f"{BOLD}{msg}{RESET}")
-        print(f"{CYAN}{'═' * 60}{RESET}\n")
-    else:
-        print(f"  {msg}")
-
-
-def pause_automation_timer() -> None:
-    """Pausa o contador de tempo de automação (usado durante prompts)."""
-    global _pause_start_time
-    _pause_start_time = time.monotonic()
-
-
-def resume_automation_timer() -> None:
-    """Resume o contador de tempo de automação após prompt."""
-    global _automation_time_paused, _pause_start_time
-    if _pause_start_time > 0:
-        _automation_time_paused += time.monotonic() - _pause_start_time
-        _pause_start_time = 0.0
-
-    log(f"[DEBUG PAUSE] Resuming timer. Total paused so far: {_automation_time_paused}s")
-
-
-def show_pause_dialog() -> str:
-    """Exibe um dialogo topmost de pausa sem roubar foco.
-
-    Retorna "resume" para continuar ou "cancel" para encerrar a automacao.
-    """
-    root = tk.Tk()
-    root.withdraw()
-
-    result = {"value": "resume"}
-
-    dialog = tk.Toplevel(root)
-    dialog.title("Automacao pausada")
-    dialog.attributes("-topmost", True)
-    dialog.resizable(False, False)
-    dialog.geometry("460x360")
-
-    hwnd = dialog.winfo_id()
-
-    def keep_visible() -> None:
-        if os.name != "nt" or not dialog.winfo_exists():
-            return
-        try:
-            user32 = ctypes.windll.user32
-            SW_SHOW = 5
-            HWND_TOPMOST = -1
-            SWP_NOMOVE = 0x0002
-            SWP_NOSIZE = 0x0001
-            SWP_NOACTIVATE = 0x0010
-            user32.ShowWindow(hwnd, SW_SHOW)
-            user32.SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
-            )
-        except Exception:
-            pass
-
-    font_label = ("Segoe UI", 11)
-    font_button = ("Segoe UI", 11)
-
-    frame = tk.Frame(dialog, padx=16, pady=18)
-    frame.pack(fill="both", expand=True)
-
-    tk.Label(
-        frame,
-        text=(
-            "A automacao esta pausada.\n\n"
-            "Clique em Retomar para continuar ou em Cancelar para encerrar."
-        ),
-        font=font_label,
-        justify="left",
-        wraplength=380,
-    ).pack(anchor="w")
-
-    button_frame = tk.Frame(frame)
-    button_frame.pack(fill="x", pady=(16, 0))
-
-    def on_resume() -> None:
-        result["value"] = "resume"
-        dialog.destroy()
-
-    def on_cancel() -> None:
-        result["value"] = "cancel"
-        dialog.destroy()
-
-    resume_button = tk.Button(button_frame, text="Retomar", command=on_resume, width=10, font=font_button)
-    resume_button.pack(side="right", padx=(6, 0))
-    cancel_button = tk.Button(button_frame, text="Cancelar automacao", command=on_cancel, width=18, font=font_button)
-    cancel_button.pack(side="right")
-
-    dialog.protocol("WM_DELETE_WINDOW", on_cancel)
-    dialog.bind("<Return>", lambda _e: on_resume())
-    dialog.bind("<Escape>", lambda _e: on_cancel())
-
-    def watchdog_visible() -> None:
-        if not dialog.winfo_exists():
-            return
-        keep_visible()
-        dialog.lift()
-        dialog.grab_set()
-        dialog.after(600, watchdog_visible)
-
-    keep_visible()
-    dialog.after(200, watchdog_visible)
-    dialog.wait_window()
-    try:
-        root.destroy()
-    except Exception:
-        pass
-
-    return result["value"]
-
-
-def check_pause() -> None:
-    """Pausa em ponto seguro e valida o ultimo campo digitado antes de bloquear."""
-    global _pause_requested, _pause_active
-    if not _pause_requested or _pause_active:
-        return
-
-    _pause_active = True
-    pause_automation_timer()
-    log("Automacao pausada pelo usuario.")
-    _verify_last_write_before_pause()
-    try:
-        decision = show_pause_dialog()
-    finally:
-        _pause_active = False
-
-    if decision == "cancel":
-        log("Automacao cancelada pelo usuario durante a pausa.")
-        raise SystemExit(1)
-
-    with _pause_lock:
-        _pause_requested = False
-    resume_automation_timer()
-    log("Automacao retomada pelo usuario.")
-
-
-def pause_point() -> None:
-    """Ponto seguro para pausar entre etapas (fora de sequencias tab/enter)."""
-    check_pause()
-
-
-def _verify_last_write_before_pause() -> None:
-    """Revalida o ultimo smart_write para evitar campo vazio antes da pausa."""
-    global _last_write_value, _last_write_verify
-    if not _last_write_verify or not _last_write_value:
-        return
-    try:
-        pyautogui.hotkey("ctrl", "a")
-        time.sleep(0.05)
-        pyautogui.hotkey("ctrl", "c")
-        time.sleep(0.05)
-        captured = pyperclip.paste() or ""
-        if _normalize_text(captured) != _normalize_text(_last_write_value):
-            log("Aviso: campo divergente antes da pausa; reaplicando valor.")
-            paste_text(_last_write_value, verify=True, retries=1)
-    except Exception as exc:
-        log(f"Aviso: falha ao reverificar ultimo campo antes da pausa ({exc})")
-    finally:
-        _last_write_value = None
-        _last_write_verify = False
-
-
-def format_duration(seconds: float) -> str:
-    """Formata duracao em segundos para o formato MM:SS ou apenas SS."""
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    if minutes > 0:
-        return f"{minutes}m {secs}s"
-    else:
-        return f"{secs}s"
-
-
-def skip_tabs(count: int, log_msg: str = "") -> None:
-    """Pula N campos (tabs) com log opcional."""
-    if log_msg:
-        log(log_msg)
-    press_tab(count=count, delay=TAB_DELAY)
-
-
-def press_tab(count: int = 1, delay: float = TAB_DELAY) -> None:
-    """Pressiona Tab com delay consistente entre navegacoes."""
-    for _ in range(count):
-        pyautogui.press("tab")
-        time.sleep(delay)
-
-
-def paste_text(
-    text: str,
-    verify: bool = True,
-    retries: int = 2,
-    delay: float = 0.15,
-    restore_clipboard: bool = True,
-) -> None:
-    """Cola texto via clipboard e valida o conteúdo quando possível.
-
-    Quando verify=True, tenta ler o campo com Ctrl+A/C e compara com o valor.
-    """
-    try:
-        previous = pyperclip.paste()
-    except Exception:
-        previous = None
-
-    def normalize(value: str) -> str:
-        return re.sub(r"\s+", " ", value or "").strip()
-
-    def attempt_paste() -> bool:
-        pyperclip.copy(text)
-        pyautogui.hotkey("ctrl", "v")
-        time.sleep(delay)
-
-        if not verify:
-            return True
-
-        try:
-            pyautogui.hotkey("ctrl", "a")
-            time.sleep(0.05)
-            pyautogui.hotkey("ctrl", "c")
-            time.sleep(0.05)
-            captured = pyperclip.paste()
-        except Exception:
-            return False
-
-        return normalize(captured) == normalize(text)
-
-    try:
-        ok = False
-        for _ in range(max(1, retries + 1)):
-            if attempt_paste():
-                ok = True
-                break
-            time.sleep(delay)
-
-        if verify and not ok:
-            log("Aviso: verificação de colagem falhou; seguindo adiante")
-    finally:
-        if restore_clipboard and previous is not None:
-            try:
-                pyperclip.copy(previous)
-            except Exception:
-                pass
-
-
-def smart_write(
-    value: str,
-    interval: float = 0.10,
-    min_paste_len: int = 4,
-    verify: bool = True,
-) -> None:
-    """Escolhe entre digitar e colar, com verificação opcional.
-
-    Desativa a verificacao para CPF/CNPJ (11/14 digitos) por formatacao automatica.
-    """
-    global _last_write_value, _last_write_verify
-    pause_point()
-    if value is None:
-        return
-    text = str(value)
-    if not text:
-        return
-
-    use_paste = len(text) >= min_paste_len or any(ch in text for ch in " /-_:.\t")
-    verify_effective = verify
-    if text.isdigit() and len(text) in (11, 14):
-        # CPF/CNPJ normalmente são formatados automaticamente pelo formulário
-        verify_effective = False
-    _last_write_value = text
-    _last_write_verify = verify_effective
-    if use_paste:
-        paste_text(text, verify=verify_effective)
-    else:
-        pyautogui.write(text, interval=interval)
-    pause_point()
-
-
-def parse_profile(path: Path) -> dict[str, dict[str, str]]:
-    sections: dict[str, dict[str, str]] = {}
-    current_section = "GENERAL"
-    sections[current_section] = {}
-
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("[") and "]" in line:
-            current_section = line[1:line.index("]")].strip().upper()
-            sections.setdefault(current_section, {})
-            continue
-        if "=" in line:
-            key, value = line.split("=", 1)
-            sections[current_section][key.strip().lower()] = value.strip()
-
-    return sections
-
-
-class ConfigProfile:
-    def __init__(self, path: Path):
-        self.path = path
-        self._data: dict[str, dict[str, str]] = {}
-        self._mtime = 0.0
-        self.reload()
-
-    def reload(self) -> None:
-        self._data = parse_profile(self.path)
-        try:
-            self._mtime = self.path.stat().st_mtime
-        except OSError:
-            self._mtime = 0.0
-
-    def ensure_current(self) -> None:
-        try:
-            current_mtime = self.path.stat().st_mtime
-        except OSError:
-            current_mtime = 0.0
-        if current_mtime != self._mtime:
-            self.reload()
-
-    def get_value(self, section: str, key: str, default: str = "") -> str:
-        self.ensure_current()
-        return self._data.get(section.upper(), {}).get(key.lower(), default)
-
-
-def list_profiles() -> list[str]:
-    return sorted(p.name for p in CONFIG_DIR.glob("*.txt"))
-
-
-def hide_console_window() -> None:
-    if os.name != "nt":
-        return
-    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-    if not hwnd:
-        return
-    # Apenas oculta o console para evitar encerramento do processo durante o debug
-    ctypes.windll.user32.ShowWindow(hwnd, 0)  # SW_HIDE
-
-
-def restore_console_popup() -> None:
-    """Restaura o terminal, trazendo-o ao topo como um popup curto."""
-    if os.name != "nt":
-        return
-    try:
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-
-        hwnd = kernel32.GetConsoleWindow()
-        if not hwnd:
-            return
-
-        SW_SHOW = 5
-        HWND_TOPMOST = -1
-        HWND_NOTOPMOST = -2
-        SWP_NOMOVE = 0x0002
-        SWP_NOSIZE = 0x0001
-        SWP_SHOWWINDOW = 0x0040
-
-        # Mostrar e trazer para frente
-        user32.ShowWindow(hwnd, SW_SHOW)
-        user32.SetForegroundWindow(hwnd)
-        user32.SetActiveWindow(hwnd)
-        user32.BringWindowToTop(hwnd)
-
-        # Tornar topmost brevemente para comportamento de popup
-        user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-        time.sleep(0.15)
-        user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-    except Exception:
-        pass
-
-
-def play_low_beep() -> None:
-    """Emite um beep de baixa frequência ao final da automação."""
-    try:
-        if os.name == "nt":
-            # Frequência baixa (~400Hz), duração 180ms
-            import winsound
-            winsound.Beep(400, 180)
-        else:
-            # Fallback para bell character em outros sistemas
-            print("\a", end="", flush=True)
-    except Exception:
-        pass
-
-
-def ensure_single_instance(name: str = MUTEX_NAME, on_duplicate: str = "warn") -> None:
-    """Impede execução duplicada usando um Mutex nomeado do Windows.
-    Se já existir outra instância:
-    - on_duplicate == 'warn': exibe alerta e encerra este processo
-    - on_duplicate == 'kill': encerra este processo (equivale a matar o duplicado)
-    """
-    if os.name != "nt":
-        return
-    kernel32 = ctypes.windll.kernel32
-    # CreateMutexW(lpMutexAttributes, bInitialOwner, lpName)
-    handle = kernel32.CreateMutexW(None, False, name)
-    last_error = kernel32.GetLastError()
-    if last_error == 183:  # ERROR_ALREADY_EXISTS
-        try:
-            if on_duplicate == "warn":
-                focused_alert("Já existe uma instância em execução. O processo será encerrado.")
-        except Exception:
-            pass
-        raise SystemExit(0)
-    else:
-        # Manter handle vivo para não liberar o mutex
-        global _SINGLETON_MUTEX_HANDLE
-        _SINGLETON_MUTEX_HANDLE = handle
+# parse_profile, ConfigProfile, list_profiles → mdfe.profile (importado acima)
+# hide_console_window, restore_console_popup, play_low_beep → mdfe.console (importado acima)
+# ensure_single_instance → mdfe.instance (importado acima)
 
 
 def choose_profile(interactive_list: list[str]) -> str:
@@ -716,255 +220,9 @@ def choose_profile(interactive_list: list[str]) -> str:
     return selected_profile
 
 
-def focused_prompt(text: str = "", title: str = "", default: str = ""):
-    """Wrapper para pyautogui.prompt."""
-    pause_automation_timer()  # Pausar timer durante prompt
-    
-    try:
-        result = pyautogui.prompt(text=text, title=title, default=default)
-    finally:
-        resume_automation_timer()  # Resumir timer após prompt
-    
-    return result
+# focused_prompt, prompt_dt_blocking, focused_alert, focused_confirm,
+# prompt_batch_info, ensure_caps_off → mdfe.dialogs / mdfe.keyboard (importados acima)
 
-
-def prompt_dt_blocking(text: str, title: str = "DT") -> str | None:
-    """Prompt dedicado para DT sem bloqueio global de interacao."""
-    pause_automation_timer()
-    root = tk.Tk()
-    root.withdraw()
-
-    result: str | None = None
-    try:
-        dialog = tk.Toplevel(root)
-        dialog.title(title)
-        dialog.attributes("-topmost", True)
-        dialog.resizable(False, False)
-        dialog.geometry("460x200")
-        dialog.lift()
-
-        font_label = ("Segoe UI", 11)
-        font_entry = ("Segoe UI", 11)
-        font_button = ("Segoe UI", 11)
-
-        frame = tk.Frame(dialog, padx=16, pady=14)
-        frame.pack(fill="both", expand=True)
-
-        tk.Label(frame, text=text, font=font_label, wraplength=420, justify="left").pack(anchor="w")
-        entry_var = tk.StringVar()
-        entry = tk.Entry(frame, textvariable=entry_var, font=font_entry)
-        entry.pack(fill="x", pady=(8, 12))
-
-        button_frame = tk.Frame(frame)
-        button_frame.pack(fill="x")
-
-        def finalize(value: str | None) -> None:
-            nonlocal result
-            result = value
-            dialog.destroy()
-
-        def on_ok() -> None:
-            value = entry_var.get().strip()
-            if not value:
-                messagebox.showwarning(
-                    "DT obrigatoria",
-                    "A DT precisa ser digitada para continuar.",
-                    parent=dialog,
-                )
-                entry.focus_set()
-                return
-            finalize(value)
-
-        def on_cancel() -> None:
-            finalize(None)
-
-        ok_button = tk.Button(button_frame, text="OK", command=on_ok, width=10, font=font_button)
-        ok_button.pack(side="right", padx=(6, 0))
-        cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel, width=10, font=font_button)
-        cancel_button.pack(side="right")
-
-        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
-        dialog.bind("<Return>", lambda _e: on_ok())
-        dialog.bind("<Escape>", lambda _e: on_cancel())
-
-        entry.focus_set()
-        dialog.focus_force()
-        dialog.after(50, entry.focus_set)
-        dialog.wait_window()
-    finally:
-        try:
-            root.destroy()
-        except Exception:
-            pass
-        resume_automation_timer()
-
-    return result
-
-
-def focused_alert(text: str = "", title: str = "", button: str = "OK"):
-    """Wrapper para pyautogui.alert."""
-    pause_automation_timer()  # Pausar timer durante alert
-    
-    try:
-        result = pyautogui.alert(text=text, title=title, button=button)
-    finally:
-        resume_automation_timer()  # Resumir timer após alert
-    
-    return result
-
-
-def focused_confirm(text: str = "", title: str = "", buttons: list[str] | None = None):
-    """Wrapper para pyautogui.confirm."""
-    pause_automation_timer()
-
-    try:
-        result = pyautogui.confirm(text=text, title=title, buttons=buttons)
-    finally:
-        resume_automation_timer()
-
-    return result
-
-
-def prompt_batch_info(ncm_options: list[str]) -> dict[str, str] | None:
-    """Prompt unico para CT-e, NF1/NF2 e NCM com validacoes basicas.
-
-    Retorna None se o usuario cancelar.
-    """
-    pause_automation_timer()
-    root = tk.Tk()
-    root.withdraw()
-    result: dict[str, str] = {}
-
-    try:
-        dialog = tk.Toplevel(root)
-        dialog.title("Dados para Averbação")
-        dialog.attributes("-topmost", True)
-        dialog.resizable(False, False)
-        dialog.geometry("600x560")
-
-        font_label = ("Segoe UI", 11)
-        font_entry = ("Segoe UI", 11)
-        font_radio = ("Segoe UI", 11)
-        font_button = ("Segoe UI", 11)
-
-        cte_var = tk.StringVar()
-        nf1_var = tk.StringVar()
-        nf2_var = tk.StringVar()
-        ncm_var = tk.StringVar()
-        ncm_other_var = tk.StringVar()
-
-        frame = tk.Frame(dialog, padx=16, pady=14)
-        frame.pack(fill="both", expand=True)
-
-        tk.Label(frame, text="Número do CT-e (obrigatório):", font=font_label).grid(row=0, column=0, sticky="w")
-        cte_entry = tk.Entry(frame, textvariable=cte_var, width=34, font=font_entry)
-        cte_entry.grid(row=1, column=0, sticky="ew", pady=(2, 8))
-
-        tk.Label(frame, text="NF1 (opcional):", font=font_label).grid(row=2, column=0, sticky="w")
-        tk.Entry(frame, textvariable=nf1_var, width=34, font=font_entry).grid(row=3, column=0, sticky="ew", pady=(2, 8))
-
-        tk.Label(frame, text="NF2 (opcional):", font=font_label).grid(row=4, column=0, sticky="w")
-        tk.Entry(frame, textvariable=nf2_var, width=34, font=font_entry).grid(row=5, column=0, sticky="ew", pady=(2, 10))
-
-        tk.Label(frame, text="Selecione o NCM:", font=font_label).grid(row=6, column=0, sticky="w")
-        ncm_frame = tk.Frame(frame)
-        ncm_frame.grid(row=7, column=0, sticky="w", pady=(2, 6))
-
-        ncm_values: list[str] = []
-
-        def select_radio_value(value: str) -> None:
-            ncm_var.set(value)
-
-        def on_radio_key(event, value: str) -> None:
-            select_radio_value(value)
-        for idx, option in enumerate(ncm_options):
-            rb = tk.Radiobutton(ncm_frame, text=option, value=option, variable=ncm_var, takefocus=True, font=font_radio)
-            rb.grid(row=idx, column=0, sticky="w")
-            rb.bind("<Return>", lambda e, v=option: on_radio_key(e, v))
-            rb.bind("<space>", lambda e, v=option: on_radio_key(e, v))
-            ncm_values.append(option)
-
-        rb_other = tk.Radiobutton(ncm_frame, text="Outro:", value="__outro__", variable=ncm_var, takefocus=True, font=font_radio)
-        rb_other.grid(row=len(ncm_options), column=0, sticky="w")
-        rb_other.bind("<Return>", lambda e, v="__outro__": on_radio_key(e, v))
-        rb_other.bind("<space>", lambda e, v="__outro__": on_radio_key(e, v))
-        ncm_values.append("__outro__")
-        tk.Entry(ncm_frame, textvariable=ncm_other_var, width=22, takefocus=True, font=font_entry).grid(
-            row=len(ncm_options), column=1, sticky="w", padx=(6, 0)
-        )
-
-        button_frame = tk.Frame(frame)
-        button_frame.grid(row=8, column=0, sticky="e", pady=(8, 0))
-
-        def on_ok() -> None:
-            ncm_choice = ncm_var.get().strip()
-            if ncm_choice == "__outro__":
-                ncm_choice = ncm_other_var.get().strip()
-
-            if not ncm_choice:
-                messagebox.showwarning("NCM obrigatório", "Selecione um NCM ou informe um código em \"Outro\".")
-                return
-
-            result["cte"] = cte_var.get().strip()
-            result["nf1"] = nf1_var.get().strip()
-            result["nf2"] = nf2_var.get().strip()
-            result["ncm"] = ncm_choice
-            dialog.destroy()
-
-        def on_cancel() -> None:
-            result.clear()
-            dialog.destroy()
-
-        ok_button = tk.Button(button_frame, text="OK", command=on_ok, width=10, font=font_button, takefocus=True)
-        ok_button.pack(side="right", padx=(6, 0))
-        cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel, width=10, font=font_button, takefocus=True)
-        cancel_button.pack(side="right")
-        ok_button.bind("<Return>", lambda e: ok_button.invoke())
-        cancel_button.bind("<Return>", lambda e: cancel_button.invoke())
-
-        def select_focused_radio(event=None) -> None:
-            widget = dialog.focus_get()
-            if isinstance(widget, tk.Radiobutton):
-                ncm_var.set(widget.cget("value"))
-
-        def move_radio(delta: int) -> None:
-            current = ncm_var.get()
-            if current not in ncm_values:
-                if ncm_values:
-                    select_radio_value(ncm_values[0])
-                return
-            idx = ncm_values.index(current)
-            next_idx = max(0, min(len(ncm_values) - 1, idx + delta))
-            select_radio_value(ncm_values[next_idx])
-
-        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
-        dialog.bind("<Return>", select_focused_radio)
-        dialog.bind("<space>", select_focused_radio)
-        dialog.bind("<Up>", lambda e: move_radio(-1))
-        dialog.bind("<Down>", lambda e: move_radio(1))
-        dialog.grab_set()
-        if ncm_options:
-            ncm_var.set(ncm_options[0])
-        dialog.after(150, lambda: dialog.lift())
-        dialog.after(200, lambda: dialog.attributes("-topmost", True))
-        dialog.after(250, lambda: dialog.focus_force())
-        dialog.after(300, lambda: cte_entry.focus_set())
-        root.wait_window(dialog)
-    finally:
-        root.destroy()
-        resume_automation_timer()
-
-    if not result:
-        return None
-    return result
-
-
-def ensure_caps_off() -> None:
-    VK_CAPITAL = 0x14
-    caps_state = ctypes.windll.user32.GetKeyState(VK_CAPITAL)
-    if caps_state & 1:
-        ctypes.windll.user32.keybd_event(VK_CAPITAL, 0, 0, 0)
-        ctypes.windll.user32.keybd_event(VK_CAPITAL, 0, 2, 0)
 
 
 def _get_foreground_title() -> str:
@@ -1847,6 +1105,7 @@ def main() -> None:
         # Selecionar perfil de configuracao
         parser = argparse.ArgumentParser()
         parser.add_argument("--profile", help="Name of profile file inside scripts/", default=None)
+        parser.add_argument("--skip-ciot", action="store_true", help="Do not prompt to run CIOT extension (used when relaunched after CIOT)")
         args = parser.parse_args()
 
         selected = args.profile
@@ -2125,50 +1384,76 @@ def main() -> None:
         log(f"Resumo final: DT={numero_dt}, CT-e={numero_cte if numero_cte else 'Não capturado'}, NCM={codigo_ncm}, NF={nf_concat if nf_concat else 'Não informado'}")
         log("═" * 60)
         
-        # Perguntar ao usuário se deseja preencher o CIOT
-        log("Perguntando ao usuário sobre preenchimento de CIOT")
-        ciot_buttons = ["Sim, preencher CIOT", "Não, encerrar"]
-        ciot_choice = focused_confirm(
-            text=(
-                "Deseja preencher o campo CIOT (Conhecimento de Transporte Intermodal Operacional) agora?\n\n"
-                "Clique em 'Sim' para abrir a extensão de preenchimento ou 'Não' para encerrar."
-            ),
-            title="Preencher CIOT?",
-            buttons=ciot_buttons
-        )
-        
-        if ciot_choice == 1:  # Sim, preencher CIOT
-            log("Usuário escolheu preencher CIOT - chamando script ciot_filler.py")
-            ui_print("Abrindo extensão CIOT...", style="step")
-            time.sleep(SLEEP_MEDIUM)
-            
-            try:
-                import subprocess
-                ciot_script_path = BASE_DIR / "ciot_filler.py"
-                if ciot_script_path.exists():
-                    # Executar o script CIOT na mesma ambiente Python/venv
-                    log(f"Executando: {ciot_script_path}")
-                    result = subprocess.run(
-                        [str(sys.executable), str(ciot_script_path)],
-                        capture_output=False,
-                        cwd=str(BASE_DIR)
-                    )
-                    log(f"Script CIOT finalizado com código: {result.returncode}")
-                    ui_print("Extensão CIOT finalizada", style="success")
-                else:
-                    log(f"Script CIOT não encontrado: {ciot_script_path}")
+        # Perguntar ao usuário se deseja preencher o CIOT (pular se --skip-ciot)
+        if not getattr(args, "skip_ciot", False):
+            log("Perguntando ao usuário sobre preenchimento de CIOT")
+            ciot_buttons = ["Sim, preencher CIOT", "Não, encerrar"]
+            ciot_choice = focused_confirm(
+                text=(
+                    "Deseja preencher o campo CIOT (Conhecimento de Transporte Intermodal Operacional) agora?\n\n"
+                    "Clique em 'Sim' para abrir a extensão de preenchimento ou 'Não' para encerrar."
+                ),
+                title="Preencher CIOT?",
+                buttons=ciot_buttons
+            )
+
+            if ciot_choice == ciot_buttons[0]:  # Sim, preencher CIOT
+                log("Usuário escolheu preencher CIOT - chamando script ciot_filler.py")
+                ui_print("Abrindo extensão CIOT...", style="step")
+                time.sleep(SLEEP_MEDIUM)
+
+                try:
+                    import subprocess
+                    ciot_script_path = BASE_DIR / "ciot_filler.py"
+                    if ciot_script_path.exists():
+                        log(f"Executando: {ciot_script_path}")
+                        try:
+                            log("Tentando focar navegador antes de iniciar CIOT")
+                            focus_browser_if_needed()
+                            time.sleep(SLEEP_SHORT)
+                        except Exception:
+                            pass
+                        try:
+                            hide_console_window()
+                        except Exception:
+                            pass
+
+                        cmd = [str(sys.executable), str(ciot_script_path)]
+                        try:
+                            if os.name == "nt":
+                                subprocess.Popen(cmd, cwd=str(BASE_DIR), creationflags=subprocess.CREATE_NEW_CONSOLE)
+                            else:
+                                subprocess.Popen(cmd, cwd=str(BASE_DIR))
+
+                            log("CIOT iniciado em nova janela; encerrando automação principal.")
+                            ui_print("CIOT iniciado em nova janela. Encerrando automação principal.", style="success")
+                            # Usar os._exit para garantir encerramento imediato do processo
+                            try:
+                                os._exit(0)
+                            except Exception:
+                                raise SystemExit(0)
+                        except Exception as e:
+                            log(f"Erro ao iniciar script CIOT: {e}")
+                            focused_alert(
+                                f"Erro ao iniciar a extensão CIOT:\n{str(e)}",
+                                title="Erro na extensão"
+                            )
+                    else:
+                        log(f"Script CIOT não encontrado: {ciot_script_path}")
+                        focused_alert(
+                            f"O script de preenchimento de CIOT não foi encontrado:\n{ciot_script_path}",
+                            title="Arquivo não encontrado"
+                        )
+                except Exception as e:
+                    log(f"Erro ao executar script CIOT: {e}")
                     focused_alert(
-                        f"O script de preenchimento de CIOT não foi encontrado:\n{ciot_script_path}",
-                        title="Arquivo não encontrado"
+                        f"Erro ao executar a extensão CIOT:\n{str(e)}",
+                        title="Erro na extensão"
                     )
-            except Exception as e:
-                log(f"Erro ao executar script CIOT: {e}")
-                focused_alert(
-                    f"Erro ao executar a extensão CIOT:\n{str(e)}",
-                    title="Erro na extensão"
-                )
+            else:
+                log("Usuário escolheu não preencher CIOT - encerrando automação principal")
         else:
-            log("Usuário escolheu não preencher CIOT - encerrando automação principal")
+            log("--skip-ciot presente: pulando prompt de CIOT")
     except SystemExit as e:
         # Capturar saídas como exit code 99 (menu), 1 (erro), etc
         if e.code == 99:
