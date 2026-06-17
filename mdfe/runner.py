@@ -19,7 +19,8 @@ from mdfe.timing import (
     format_duration, _automation_start_time, _automation_time_paused
 )
 import mdfe.timing as _timing
-from mdfe.failsafe import start_failsafe_f8, stop_failsafe_f8, request_pause, pause_point
+from mdfe.failsafe import start_failsafe_f8, stop_failsafe_f8, request_pause
+from mdfe.pause import pause_point
 import mdfe.failsafe as _failsafe
 from mdfe.console import hide_console_window, restore_console_popup, play_low_beep
 from mdfe.instance import ensure_single_instance

@@ -56,9 +56,9 @@ if %CHOICE_RESULT%==2 goto editor
 if %CHOICE_RESULT%==1 goto modular
 
 :install
-echo Instalando pacotes Python necessarios...^ (pyautogui pyperclip Pillow pywin32 pynput^)
+echo Instalando pacotes Python necessarios...^ (pyautogui pyperclip Pillow pynput^)
     "%PYTHON%" -m pip install --upgrade pip >nul
-    "%PYTHON%" -m pip install pyautogui pyperclip Pillow pywin32 pynput >nul
+    "%PYTHON%" -m pip install pyautogui pyperclip Pillow pynput >nul
 if errorlevel 1 (
     echo Falha na instalacao, verifique a saida acima.
     pause
