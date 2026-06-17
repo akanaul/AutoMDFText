@@ -39,7 +39,7 @@ cada rota configurada.
 2. Informa os dados dinâmicos da operação (número do DT, CT-e, NFs).
 3. A automação assume o controle do teclado e clipboard, navega pelos campos do InvoiSys
    e preenche cada valor na ordem exata esperada pelo formulário.
-4. Ao terminar, o operador tem a opção de preencher o campo CIOT via módulo complementar.
+4. Ao terminar, a automação executa obrigatoriamente o preenchimento do CIOT (através do componente `ciot_filler.py` / `ciot_filter`). Este componente passou a ser obrigatório na automação, estando atualmente sob desenvolvimento (WIP) e sendo integrado de forma completa ao fluxo principal logo após a conclusão da refatoração atual.
 
 ### Tecnologias utilizadas
 
@@ -129,8 +129,7 @@ de duplicidade automaticamente.
             ├── constants.py       ← constantes centralizadas
             ├── scripts/*.txt      ← perfis de rota
             ├── logs/              ← logs de sessão
-            └── ciot_filler.py    ← módulo complementar (CIOT)
-                   (lançado como subprocesso ao final)
+            └── ciot_filler.py    ← componente obrigatório (CIOT) [WIP - Integração pós-refatoração]
 ```
 
 ### 3.2 Fluxo de chamada entre módulos
@@ -146,7 +145,7 @@ run.bat
         ├── fill_modal_rodo(profile)
         ├── fill_additional_info(profile)
         ├── perform_averbacao(cte, dt, nf)
-        └── [opcional] subprocess → ciot_filler.py
+        └── [obrigatório - WIP] subprocess → ciot_filler.py
 ```
 
 ---
@@ -730,20 +729,17 @@ Executa a averbação e preenche o campo de contribuinte com os dados da operaç
 
 ---
 
-### `ciot_filler.py` — Módulo complementar CIOT
+### `ciot_filler.py` (ou `ciot_filter`) — Componente Obrigatório CIOT (WIP)
 
 **Responsabilidade:** preenchimento do campo CIOT (Conhecimento de Transporte
 Intermodal Operacional) que foi adicionado recentemente ao formulário do InvoiSys.
-É executado como **subprocesso separado** ao final da automação principal, permitindo
-que o operador decida se deseja preencher o CIOT ou não.
+Anteriormente projetado como opcional, este módulo agora é um **componente obrigatório** do fluxo de automação.
 
-#### Por que é um processo separado?
+#### Estado Atual (WIP) e Integração
 
-- O campo CIOT é opcional e foi adicionado depois da automação principal.
-- Separar como subprocesso permite que o módulo seja executado independentemente
-  sem iniciar o fluxo completo do MDF-e.
-- O `modular_mdfe.py` encerra com `os._exit(0)` antes de lançar o subprocesso,
-  liberando o mutex de instância para que o novo processo possa adquiri-lo se necessário.
+O componente está atualmente em fase de desenvolvimento/construção (**WIP - Work In Progress**) e será integrado de forma definitiva e fluida ao fluxo de execução principal imediatamente após a finalização da refatoração em andamento do motor de MDF-e.
+
+Por enquanto, a chamada permanece estruturada de forma que será acionada de forma mandatória ao término do preenchimento principal do MDF-e.
 
 #### Funções do `ciot_filler.py`
 
@@ -869,9 +865,9 @@ Operador → run.bat
           ├── 21. perform_averbacao(cte, dt, nf) — executa averbação
           ├── 22. restore_console_popup() + play_low_beep() — alerta ao operador
           ├── 23. Exibição de resumo (DT, CT-e, NCM, NF, tempos)
-          └── 24. focused_confirm("Preencher CIOT?")
-                   ├─[Sim] subprocess → ciot_filler.py → os._exit(0)
-                   └─[Não] encerramento normal
+          └── 24. Execução mandatória do CIOT (Componente `ciot_filler.py` / `ciot_filter`) [WIP - Integração pós-refatoração]
+                   ├─ Atualmente aciona o subprocesso `ciot_filler.py` para execução
+                   └─ Integração total e fluida no mesmo fluxo principal pós-refatoração
 ```
 
 ---
