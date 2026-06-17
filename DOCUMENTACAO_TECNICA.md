@@ -879,6 +879,65 @@ Operador → run.bat
 
 ---
 
+### [2025-06] Refatoração Parte 4 — Utilitários de Navegação e Browser
+
+**Tipo:** Refatoração
+
+**Módulo(s) criados:** `mdfe/browser.py`
+**Módulo(s) modificados:** `modular_mdfe.py`
+
+**Problema / contexto:**
+Segregação de responsabilidades. Funções auxiliares para lidar com foco do navegador, detecção de janelas ativas e verificação de campos no clipboard (`_get_foreground_title`, `focus_browser_if_needed`, `wait_for_form`, `verify_cte_on_page`, etc.) estavam misturadas no monólito, dificultando sua leitura e eventual reuso pelo componente CIOT.
+
+**Solução adotada:**
+Extração das 13 funções utilitárias do navegador para o módulo `mdfe/browser.py`. O arquivo `modular_mdfe.py` passa a importá-las (`focus_browser_if_needed`, `wait_for_form`, `verify_cte_on_page`), eliminando cerca de 340 linhas de código do script principal. A fidelidade do comportamento é mantida idêntica à versão legada.
+
+**Verificação realizada:**
+- `py_compile` em todo o pacote `mdfe/` e no `modular_mdfe.py`: ✓ OK
+- Execução parcial e análise das assinaturas: ✓ OK (sem alteração de dependências ou ordem dos parâmetros)
+
+**Arquivos modificados:**
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `mdfe/browser.py` | Criado |
+| `modular_mdfe.py` | Modificado (definições removidas e substituídas por imports) |
+
+---
+
+### [2025-06] Refatoração Parte 3 — Perfis, Diálogos e Teclado
+
+**Tipo:** Refatoração
+
+**Módulo(s) criados:** `mdfe/profile.py`, `mdfe/dialogs.py`, `mdfe/keyboard.py`
+**Módulo(s) modificados:** `modular_mdfe.py`
+
+**Problema / contexto:**
+Primeiro impacto direto no monólito `modular_mdfe.py`. Era necessário extrair as principais rotinas de entrada de dados (diálogos tkinter), gerenciamento de arquivos de rotas (ConfigProfile) e funções de simulação de digitação/teclado (`press_tab`, `smart_write`, `paste_text`).
+
+**Solução adotada:**
+Isolamento em módulos específicos:
+- `mdfe/profile.py`: Gerencia carregamento/monitoramento de mudanças em arquivos de rota.
+- `mdfe/dialogs.py`: Controla caixas de confirmação, avisos e prompts (inclusive tkinter topmost).
+- `mdfe/keyboard.py`: Simulação do comportamento de escrita inteligente e manipulação de clipboard.
+A integração foi feita no `modular_mdfe.py` substituindo as implementações originais pelos respectivos imports.
+
+**Verificação realizada:**
+- `py_compile` nos novos módulos e no principal: ✓ OK
+- Execução completa usando perfil de teste: ✓ OK
+- Logs gerados no mesmo formato.
+
+**Arquivos modificados:**
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `mdfe/profile.py` | Criado |
+| `mdfe/dialogs.py` | Criado |
+| `mdfe/keyboard.py` | Criado |
+| `modular_mdfe.py` | Modificado |
+
+---
+
 ### [2025-06] Refatoração Parte 2 — Módulos de sistema e console
 
 **Tipo:** Refatoração
