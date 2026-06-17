@@ -1,2 +1,4 @@
 # Pacote mdfe — módulos de automação AutoMDFText
-# Ponto de entrada público exposto após a refatoração completa (Parte 5).
+from mdfe.runner import main
+
+__all__ = ["main"]

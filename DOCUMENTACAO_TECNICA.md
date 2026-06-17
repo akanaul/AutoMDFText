@@ -879,6 +879,43 @@ Operador → run.bat
 
 ---
 
+### [2025-06] Refatoração Parte 5 — Etapas de Automação, Runner e Wrapper Final
+
+**Tipo:** Refatoração
+
+**Módulo(s) criados:** `mdfe/steps/navigate.py`, `mdfe/steps/fill_mdfe.py`, `mdfe/steps/fill_modal_rodo.py`, `mdfe/steps/fill_additional_info.py`, `mdfe/steps/averbacao.py`, `mdfe/steps/__init__.py`, `mdfe/runner.py`
+**Módulo(s) modificados:** `modular_mdfe.py`, `mdfe/__init__.py`, `mdfe/profile.py`
+
+**Problema / contexto:**
+Conclusão da modularização do monólito `modular_mdfe.py`. Todas as etapas sequenciais de preenchimento (`navigate_to_mdfe`, `fill_mdfe`, `fill_modal_rodo`, `fill_additional_info`, `perform_averbacao`) e o loop principal (`main`) precisavam ser desacoplados para que o script principal se tornasse apenas um wrapper leve.
+
+**Solução adotada:**
+- Criação do subpacote `mdfe/steps/` contendo cada etapa da automação em um arquivo dedicado.
+- Criação de `mdfe/runner.py` contendo a lógica central de `main()`.
+- O script legado `modular_mdfe.py` foi reduzido a 5 linhas de código, atuando puramente como um redirecionador (wrapper) para `mdfe.runner.main()`, mantendo total compatibilidade com chamadas externas e com o `run.bat`.
+- A função interativa `choose_profile` foi migrada de `modular_mdfe.py` para `mdfe/profile.py`.
+
+**Verificação realizada:**
+- `py_compile` em todos os módulos novos, reestruturados e no wrapper: ✓ OK
+- Compatibilidade de chamada garantida para `run.bat` e relançamento de CIOT.
+
+**Arquivos modificados:**
+
+| Arquivo | Tipo de alteração |
+|---|---|
+| `mdfe/steps/navigate.py` | Criado |
+| `mdfe/steps/fill_mdfe.py` | Criado |
+| `mdfe/steps/fill_modal_rodo.py` | Criado |
+| `mdfe/steps/fill_additional_info.py` | Criado |
+| `mdfe/steps/averbacao.py` | Criado |
+| `mdfe/steps/__init__.py` | Criado |
+| `mdfe/runner.py` | Criado |
+| `mdfe/__init__.py` | Modificado (expõe `main`) |
+| `mdfe/profile.py` | Modificado (adicionado `choose_profile`) |
+| `modular_mdfe.py` | Modificado (reduzido a wrapper leve) |
+
+---
+
 ### [2025-06] Refatoração Parte 4 — Utilitários de Navegação e Browser
 
 **Tipo:** Refatoração
