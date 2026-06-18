@@ -1,8 +1,8 @@
 # AutoMDFText — Documentação Técnica do Projeto
 
-> **Versão do documento:** 1.0  
-> **Data:** Junho 2025  
-> **Escopo:** Estado atual do projeto + schema para registrar cada melhoria futura  
+> **Versão do documento:** 1.1  
+> **Data:** Junho 2026  
+> **Escopo:** Estado atual do projeto (pós-refatoração modular) + schema para registrar cada melhoria futura  
 
 ---
 
@@ -39,7 +39,7 @@ cada rota configurada.
 2. Informa os dados dinâmicos da operação (número do DT, CT-e, NFs).
 3. A automação assume o controle do teclado e clipboard, navega pelos campos do InvoiSys
    e preenche cada valor na ordem exata esperada pelo formulário.
-4. Ao terminar, a automação executa obrigatoriamente o preenchimento do CIOT (através do componente `ciot_filler.py` / `ciot_filter`). Este componente passou a ser obrigatório na automação, estando atualmente sob desenvolvimento (WIP) e sendo integrado de forma completa ao fluxo principal logo após a conclusão da refatoração atual.
+4. **(WIP — próxima tarefa)** O preenchimento do CIOT será integrado ao pipeline como etapa obrigatória após a conclusão do MDF-e.
 
 ### Tecnologias utilizadas
 
@@ -98,6 +98,7 @@ não quebrar em outros sistemas, mas a operação real é sempre no Windows.
 
 O InvoiSys roda no navegador (Edge/Chrome) e a automação **não usa Selenium nem
 WebDriver**. Todo preenchimento é feito via simulação de teclado e clipboard porque:
+
 - O acesso à instância do navegador via driver não é viável no ambiente corporativo.
 - A abordagem por teclado/clipboard é mais resiliente a mudanças de versão do navegador.
 
@@ -113,44 +114,72 @@ de duplicidade automaticamente.
 
 ### 3.1 Diagrama de componentes (estado atual)
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  Ponto de entrada do operador                                    │
-│  run.bat                                                         │
-│  • Detecta / cria .venv                                         │
-│  • Guard de instância duplicada                                  │
-│  • Menu: [1] MDF-e  [2] Editor  [3] Deps  [4] Sair             │
-└───────────┬──────────────────────┬───────────────────────────────┘
+```markdown
+        ─────────────────────────────────────────────────────────────────
+      │  Ponto de entrada do operador                                    │
+      │  run.bat                                                         │
+      │  • Detecta / cria .venv                                          │
+      │  • Guard de instância duplicada                                  │
+      │  • Menu: [1] MDF-e  [2] Editor  [3] Deps  [4] Sair               │
+        ─────────────────────────────────────────────────────────────────
             │                      │
             ▼                      ▼
    modular_mdfe.py          script_editor.py
-   (automação MDF-e)        (editor de perfis GUI)
+   (wrapper legado)         (editor de perfis GUI)
             │
-            ├── constants.py       ← constantes centralizadas
-            ├── scripts/*.txt      ← perfis de rota
-            ├── logs/              ← logs de sessão
-            └── ciot_filler.py    ← componente obrigatório (CIOT) [WIP - Integração pós-refatoração]
+            ▼
+   mdfe.runner.main()
+   (motor de automação)
+            │
+            ├── mdfe/logger.py       ← logging e console
+            ├── mdfe/timing.py       ← temporização e métricas
+            ├── mdfe/failsafe.py     ← listener F8/F9
+            ├── mdfe/pause.py        ← diálogo de pausa
+            ├── mdfe/console.py      ← controle de janela
+            ├── mdfe/instance.py     ← mutex single-instance
+            ├── mdfe/dialogs.py      ← prompts e alertas
+            ├── mdfe/keyboard.py     ← teclado e clipboard
+            ├── mdfe/browser.py      ← detecção/foco de janela
+            ├── mdfe/profile.py      ← parsing de perfis
+            ├── mdfe/steps/          ← etapas de preenchimento
+            │   ├── navigate.py
+            │   ├── fill_mdfe.py
+            │   ├── fill_modal_rodo.py
+            │   ├── fill_additional_info.py
+            │   └── averbacao.py
+            ├── constants.py         ← constantes centralizadas
+            ├── scripts/*.txt        ← perfis de rota
+            ├── logs/                ← logs de sessão
+            └── test_suite.py        ← testes unitários
 ```
 
 ### 3.2 Fluxo de chamada entre módulos
 
 ```
 run.bat
-  └─► modular_mdfe.py (main)
-        ├── lê constants.py
-        ├── lê scripts/<perfil>.txt via ConfigProfile
-        ├── prompts (DT, CT-e, NF, NCM)
-        ├── navigate_to_mdfe()
-        ├── fill_mdfe(profile, ncm)
-        ├── fill_modal_rodo(profile)
-        ├── fill_additional_info(profile)
-        ├── perform_averbacao(cte, dt, nf)
-        └── [obrigatório - WIP] subprocess → ciot_filler.py
+  └─► modular_mdfe.py (wrapper, 6 linhas)
+        └─► mdfe.runner.main()
+              ├── lê constants.py
+              ├── mdfe.profile.ConfigProfile → scripts/<perfil>.txt
+              ├── mdfe.instance.ensure_single_instance()
+              ├── mdfe.dialogs.prompt_dt_blocking()   ← DT
+              ├── mdfe.dialogs.prompt_batch_info()    ← CT-e, NF, NCM
+              ├── mdfe.browser.verify_cte_on_page()
+              ├── mdfe.steps.navigate_to_mdfe()
+              ├── mdfe.steps.fill_mdfe(profile, ncm)
+              ├── mdfe.steps.fill_modal_rodo(profile)
+              ├── mdfe.steps.fill_additional_info(profile)
+              └── mdfe.steps.perform_averbacao(cte, dt, nf)
+
 ```
 
 ---
 
 ## 4. Documentação dos Arquivos e Funções
+
+> **Nota:** O projeto passou por refatoração completa (Partes 1-5) que converteu o monólito
+> `modular_mdfe.py` (originalmente 2228 linhas) em um pacote modular `mdfe/`. As funções
+> estão agora distribuídas por módulos especializados conforme documentado abaixo.
 
 ---
 
@@ -178,8 +207,7 @@ sem encerrar o terminal.
 ### `constants.py` — Constantes centralizadas
 
 **Responsabilidade:** único ponto de definição de todos os delays, timeouts e
-configurações numéricas usados tanto na automação principal quanto em módulos
-complementares (ex.: `ciot_filler.py`). Centralizar aqui evita que um ajuste de
+configurações numéricas usados na automação. Centralizar aqui evita que um ajuste de
 timing precise ser feito em múltiplos arquivos.
 
 #### Constantes documentadas
@@ -210,452 +238,186 @@ timing precise ser feito em múltiplos arquivos.
 
 ---
 
-### `modular_mdfe.py` — Motor principal de automação
+### `modular_mdfe.py` — Wrapper legado (ponto de entrada)
 
-**Responsabilidade:** orquestra o fluxo completo de preenchimento do MDF-e.
-Contém todas as funções de automação, utilitários de sistema e a função `main()`.
+**Responsabilidade:** arquivo de transição que mantém compatibilidade com o `run.bat`
+e com scripts existentes que chamam `python modular_mdfe.py`. Atualmente é um wrapper
+de 6 linhas que importa e delega para `mdfe.runner.main()`.
 
-> **Nota:** este arquivo está em processo de refatoração modular planejada.
-> A documentação abaixo mapeia as funções *como estão hoje* antes da reestruturação.
+```python
+"""Ponto de entrada legado — delega para o pacote mdfe."""
+from mdfe.runner import main
+if __name__ == "__main__":
+    main()
+```
 
-#### Seção: Logging e sessão
-
----
-
-##### `log(msg: str) → None`
-
-Registra uma mensagem no arquivo de log da sessão corrente (`logs/automation_<ts>.log`).
-Não imprime no console — saída de console usa `ui_print`. Silencia exceções de I/O
-para não interromper a automação por falha de disco.
+> Nenhuma lógica de automação reside mais neste arquivo.
 
 ---
 
-##### `ui_print(msg: str, style: str = "info") → None`
+### `mdfe/logger.py` — Logging e console
 
-Imprime no console com formatação ANSI colorida de acordo com o `style`:
+**Responsabilidade:** registrar mensagens em arquivo de log de sessão e formatar
+saída colorida no console.
 
-| style | Visual | Uso |
-|---|---|---|
-| `"header"` | Azul com separadores `═` | Títulos de seção |
-| `"step"` | Azul `▸` | Início de etapa |
-| `"success"` | Verde `✓` | Conclusão bem-sucedida |
-| `"error"` | Vermelho `✗` | Falha |
-| `"warning"` | Amarelo `⚠` | Aviso não-crítico |
-| `"info"` (default) | Texto simples indentado | Informações gerais |
-
----
-
-##### `start_automation_session(selected: str, profile_path: Path) → float`
-
-Inicializa uma nova sessão de log com timestamp único, reinicia os contadores de tempo
-(`_automation_start_time`, `_automation_time_paused`) e retorna o instante monotônico
-do início real (inclui o tempo de seleção de perfil e prompts, para cálculo de tempo total).
-
----
-
-#### Seção: Failsafe e pausa
-
----
-
-##### `start_failsafe_f8() → None`
-
-Inicia um thread listener de teclado global usando `pynput`. Monitora duas teclas:
-- **F8:** encerra a automação imediatamente via `os._exit(1)` e exibe alerta Win32.
-- **F9:** sinaliza uma pausa para o próximo ponto seguro (não interrompe sequências de Tab/Enter).
-
-Em Windows, usa o filtro `win32_event_filter` para rejeitar eventos injetados
-(simulados por outro software) e aceitar apenas teclas físicas. Isso evita que a
-própria automação acione o failsafe ao enviar teclas.
-
----
-
-##### `stop_failsafe_f8() → None`
-
-Para o listener de teclado iniciado por `start_failsafe_f8`. Chamado no bloco `finally`
-do `main` para garantir que o listener não fique ativo após o encerramento.
-
----
-
-##### `request_pause() → None`
-
-Sinaliza `_pause_requested = True` de forma thread-safe. Chamada pelo listener de F9.
-A pausa efetiva só acontece quando o fluxo principal chega ao próximo `pause_point()`.
-
----
-
-##### `show_pause_dialog() → str`
-
-Exibe uma janela tkinter topmost com botões "Retomar" e "Cancelar automação". Inclui
-um watchdog que reaplica o status `HWND_TOPMOST` a cada 600 ms para garantir que o
-diálogo permaneça visível mesmo que o navegador tente tomar o foco. Retorna `"resume"`
-ou `"cancel"`.
-
----
-
-##### `check_pause() → None`
-
-Verifica se uma pausa foi solicitada. Se sim, pausa o timer de automação, exibe o
-diálogo e aguarda a decisão do operador. Se o operador cancelar, levanta `SystemExit(1)`.
-Após retomar, marca `_pause_requested = False` e recomeça o timer.
-
----
-
-##### `pause_point() → None`
-
-Ponto seguro de checagem, chamado entre etapas do fluxo (nunca dentro de sequências
-de Tab/Enter). Delega para `check_pause()`. O padrão de uso é inserir `pause_point()`
-entre funções de preenchimento para que o operador sempre possa pausar sem risco de
-o formulário ficar em estado inconsistente.
-
----
-
-##### `_verify_last_write_before_pause() → None`
-
-Antes de bloquear na pausa, revalida o último valor enviado por `smart_write` usando
-Ctrl+A / Ctrl+C para comparar o conteúdo do campo com o valor esperado. Se houver
-divergência, reaplicá via `paste_text`. Isso evita que um campo fique vazio se o
-operador pausar imediatamente após um `smart_write`.
-
----
-
-#### Seção: Timers e métricas
-
----
-
-##### `pause_automation_timer() → None`
-
-Registra o instante de início de uma pausa de usuário (prompt, diálogo). Não pausa
-a automação em si — apenas registra o timestamp para descontar do tempo de automação.
-
----
-
-##### `resume_automation_timer() → None`
-
-Calcula o tempo decorrido desde o último `pause_automation_timer` e acumula em
-`_automation_time_paused`. Chamado ao fechar prompts e diálogos.
-
----
-
-##### `format_duration(seconds: float) → str`
-
-Formata uma duração em segundos para exibição legível:
-- Menos de 60 s → `"42s"`
-- 60 s ou mais → `"2m 15s"`
-
----
-
-#### Seção: Utilitários de teclado e clipboard
-
----
-
-##### `press_tab(count: int = 1, delay: float = TAB_DELAY) → None`
-
-Pressiona Tab `count` vezes com `delay` entre cada pressionamento. Usado em toda
-navegação por formulário onde a posição do campo é conhecida pela contagem de Tabs.
-
----
-
-##### `skip_tabs(count: int, log_msg: str = "") → None`
-
-Wrapper de `press_tab` com logging opcional. Usado para pular campos não editáveis
-ou desnecessários na sequência de navegação.
-
----
-
-##### `paste_text(text, verify, retries, delay, restore_clipboard) → None`
-
-Cola texto via clipboard com verificação opcional:
-1. Salva o conteúdo anterior do clipboard.
-2. Copia `text` para o clipboard e pressiona Ctrl+V.
-3. Se `verify=True`, lê o campo com Ctrl+A / Ctrl+C e compara com o valor esperado.
-4. Tenta até `retries + 1` vezes se a verificação falhar.
-5. Restaura o clipboard ao valor anterior (parâmetro `restore_clipboard`).
-
-CPF e CNPJ (11 e 14 dígitos numéricos) têm `verify` desativado automaticamente
-porque o formulário aplica máscara e o valor lido difere do digitado.
-
----
-
-##### `smart_write(value, interval, min_paste_len, verify) → None`
-
-Escolhe automaticamente entre colar (clipboard) e digitar (pyautogui.write):
-- **Clipboard** se `len(text) >= min_paste_len` (padrão: 4) ou se o texto contém
-  espaço, `/`, `-`, `_`, `:`, `.` ou tab — caracteres que digitação caractere a
-  caractere pode não enviar corretamente.
-- **Digitação** para textos curtos sem caracteres especiais.
-
-Também registra o último valor para `_verify_last_write_before_pause`.
-
----
-
-##### `ensure_caps_off() → None`
-
-Verifica o estado do Caps Lock via `GetKeyState` (Win32) e o desativa se estiver
-ligado, pressionando e soltando a tecla programaticamente. Chamado antes de iniciar
-o preenchimento para evitar que textos maiúsculos esperados (como UFs) sejam enviados
-em minúsculas ou vice-versa.
-
----
-
-##### `upload_latest_xml() → None`
-
-Seleciona o arquivo mais recente da pasta Downloads pelo timestamp de criação e
-escreve o caminho completo no campo de upload via `smart_write`, depois confirma
-com Enter. Usado tanto no preenchimento do MDF-e quanto na averbação.
-
----
-
-#### Seção: Gerenciamento de janelas e navegador
-
----
-
-##### `_get_foreground_title() → str`
-
-Retorna o título da janela atualmente em foco usando `GetForegroundWindow` e
-`GetWindowTextW` (Win32).
-
----
-
-##### `_get_foreground_class() → str`
-
-Retorna a classe de janela (`GetClassNameW`) da janela em foco. A classe `Chrome_WidgetWin_1`
-identifica janelas do Chrome/Edge de forma mais confiável que o título.
-
----
-
-##### `_get_window_process_name(hwnd: int) → str`
-
-Dado um handle de janela, abre o processo correspondente e lê o nome do executável
-via `GetModuleBaseNameW`. Retorna strings como `"msedge.exe"` ou `"chrome.exe"`.
-
----
-
-##### `_is_cloaked_window(hwnd: int) → bool`
-
-Verifica se a janela está "cloaked" (oculta pela DWM, típico de apps UWP em background).
-Janelas cloaked são excluídas da busca por navegador para evitar falsos positivos.
-
----
-
-##### `_is_top_level_app_window(hwnd: int) → bool`
-
-Filtra janelas utilitárias: owned windows (pop-ups filhos) e janelas com estilo
-`WS_EX_TOOLWINDOW` são excluídas. Mantém apenas janelas de aplicativo de nível raiz.
-
----
-
-##### `_is_standard_window(hwnd: int) → bool`
-
-Verifica se a janela tem o estilo `WS_OVERLAPPEDWINDOW` (título + bordas), filtrando
-janelas sem decoração que não representam uma aplicação interativa.
-
----
-
-##### `_is_browser_window(title, cls, process_name) → bool`
-
-Combina título, classe e nome de processo para determinar se uma janela é um navegador:
-- Processo `msedge.exe` ou `chrome.exe` → sempre positivo.
-- Título contendo `"chrome"`, `"edge"`, `"invoisys"`, etc. → positivo.
-- Classe `Chrome_WidgetWin_1` → positivo (sem depender só do título).
-
----
-
-##### `_find_browser_windows() → list[int]`
-
-Enumera todas as janelas visíveis do sistema com `EnumWindows` e filtra usando
-`_is_cloaked_window`, `_is_top_level_app_window`, `_is_standard_window` e
-`_is_browser_window`. Retorna a lista de handles das janelas de navegador encontradas.
-
----
-
-##### `focus_browser_if_needed() → None`
-
-Usa `_find_browser_windows` para detectar quantas janelas de navegador existem:
-- **Mais de uma janela:** exibe aviso ao operador e usa Win+1 para ir para a primeira.
-- **Navegador já em foco:** não faz nada (evita minimizar acidentalmente).
-- **Navegador fora de foco:** pressiona Win+1 e verifica o resultado.
-
-**Decisão de design:** Win+1 ativa o primeiro aplicativo fixado na barra de tarefas.
-A convenção é que o navegador seja o primeiro item fixado, o que é válido no ambiente
-corporativo deste projeto. Essa abordagem evita Alt+Tab não-determinístico.
-
----
-
-##### `_click_below_edge_searchbar(offset) → None`
-
-Clica na região de conteúdo da página (abaixo da barra de endereço do Edge) para
-garantir que Ctrl+A / Ctrl+C copiem o conteúdo da página e não o conteúdo da barra
-de endereço. Usa o RECT da janela em foco para calcular a posição.
-
----
-
-##### `_focus_page_for_copy() → None`
-
-Sequência: ESC (fecha qualquer pop-up residual) + `_click_below_edge_searchbar`.
-Garante que o foco esteja no corpo da página antes de copiar.
-
----
-
-##### `wait_for_form(target_text, tempo_maximo, intervalo, copy_attempts) → str`
-
-Aguarda um formulário abrir verificando o conteúdo da página via clipboard.
-A cada `intervalo` segundos, faz `copy_attempts` ciclos de Ctrl+A / Ctrl+C e
-verifica se `target_text` está no conteúdo copiado (normalizado, case-insensitive).
-Se não detectar em `tempo_maximo`, encerra com `SystemExit(1)`.
-
----
-
-##### `verify_cte_on_page(numero_cte, tempo_maximo, intervalo) → None`
-
-Verifica se o número do CT-e informado pelo operador aparece na página após o DT
-ser inserido. Tenta três estratégias de match em ordem:
-1. String direta.
-2. Regex de dígitos isolados (sem dígitos adjacentes).
-3. Comparação de strings apenas com dígitos.
-
-Se não encontrar em `tempo_maximo`, exibe alerta e encerra.
-
----
-
-#### Seção: Perfis de configuração
-
----
-
-##### `parse_profile(path: Path) → dict[str, dict[str, str]]`
-
-Lê um arquivo `.txt` de perfil linha por linha e organiza em dicionário de seções.
-Ignora linhas em branco e comentários (`#`). Seções são demarcadas por `[NOME_SECAO]`.
-Chaves e valores são separados por `=`.
-
----
-
-##### `class ConfigProfile`
-
-Representa um perfil carregado em memória com detecção automática de mudança no arquivo.
-
-| Método | Descrição |
+| Função | Descrição |
 |---|---|
-| `__init__(path)` | Carrega o perfil e registra o mtime |
-| `reload()` | Relê o arquivo e atualiza o mtime |
-| `ensure_current()` | Relê automaticamente se o mtime mudou (hot-reload) |
-| `get_value(section, key, default)` | Retorna o valor da chave na seção; `default=""` se ausente |
+| `log(msg: str)` | Registra mensagem em `logs/automation_<ts>.log`. Não imprime no console. Silencia exceções de I/O. |
+| `ui_print(msg: str, style: str = "info")` | Imprime no console com formatação ANSI. Estilos: `header` (azul `═`), `step` (azul `▸`), `success` (verde `✓`), `error` (vermelho `✗`), `warning` (amarelo `⚠`), `info` (padrão, indentado). |
+| `start_automation_session(selected: str, profile_path: Path) → float` | Inicializa sessão de log com timestamp, reinicia contadores de tempo em `mdfe.timing`, retorna instante monotônico do início real. |
 
 ---
 
-##### `list_profiles() → list[str]`
+### `mdfe/timing.py` — Temporização e métricas
 
-Retorna os nomes de todos os arquivos `.txt` em `scripts/`, ordenados alfabeticamente.
+**Responsabilidade:** controlar os contadores de tempo de automação, descontando
+pausas de interação do operador (prompts, diálogos).
 
----
+| Função | Descrição |
+|---|---|
+| `pause_automation_timer()` | Registra instante de início de uma pausa de usuário. |
+| `resume_automation_timer()` | Calcula tempo decorrido desde a última pausa e acumula em `_automation_time_paused`. |
+| `format_duration(seconds: float) → str` | Formata duração: `< 60s → "42s"`, `≥ 60s → "2m 15s"`. |
 
-##### `choose_profile(interactive_list) → str`
-
-Menu interativo no terminal para seleção de perfil. Aceita número (índice) ou nome
-exato do arquivo (case-insensitive). Opção `0` levanta `SystemExit(99)` para retornar
-ao menu do `run.bat`. Limita a 100 tentativas para evitar loops infinitos. Oculta a
-janela do terminal após seleção (a automação roda em background a partir desse ponto).
-
----
-
-#### Seção: Diálogos e prompts
+**Globals:** `_automation_start_time` e `_automation_time_paused` (lidos por `runner.py`).
 
 ---
 
-##### `focused_alert(text, title, button) → str`
+### `mdfe/failsafe.py` — Failsafe de teclado (F8/F9)
 
-Wrapper de `pyautogui.alert` que pausa o timer de automação durante a exibição e
-o retoma ao fechar. Isso garante que o tempo de resposta do operador não seja
-contabilizado como "tempo de automação".
+**Responsabilidade:** listener global de teclado via `pynput` para F8 (encerrar
+imediatamente) e F9 (sinalizar pausa). Mantém estado de pausa compartilhado.
 
----
+| Função | Descrição |
+|---|---|
+| `start_failsafe_f8()` | Inicia thread listener. F8 → `os._exit(1)` + alerta Win32 MessageBox. F9 → `request_pause()`. Usa `win32_event_filter` para ignorar teclas injetadas. |
+| `stop_failsafe_f8()` | Para o listener. Chamado no `finally` do `main()`. |
+| `request_pause()` | Sinaliza `_pause_requested = True` de forma thread-safe. |
 
-##### `focused_confirm(text, title, buttons) → str`
-
-Wrapper de `pyautogui.confirm`. Retorna a **string do botão clicado** (ex.:
-`"Sim, preencher CIOT"`), não um índice numérico. Essa distinção é crítica: código
-que compare o retorno com um inteiro sempre falhará silenciosamente.
-
----
-
-##### `focused_prompt(text, title, default) → str | None`
-
-Wrapper de `pyautogui.prompt` com controle de timer.
+**Globals:** `_pause_requested`, `_pause_active`, `_pause_lock` (lidos por `mdfe/pause.py`).
 
 ---
 
-##### `prompt_dt_blocking(text, title) → str | None`
+### `mdfe/pause.py` — Diálogo de pausa
 
-Diálogo tkinter personalizado para entrada do número do DT. Tem validação embutida
-(não permite OK com campo vazio) e foco automático no campo de entrada. O timer de
-automação fica pausado enquanto o diálogo está aberto.
+**Responsabilidade:** exibir janela de diálogo topmost quando o operador solicita
+pausa (F9), com watchdog para manter-se visível.
 
----
-
-##### `prompt_batch_info(ncm_options) → dict[str, str] | None`
-
-Diálogo tkinter unificado para coleta de CT-e, NF1, NF2 e NCM em uma única interação
-com o operador. O NCM é selecionado via radiobutton (com opção "Outro" para digitação
-livre). Retorna `None` se o operador cancelar.
-
-**Decisão de design:** consolidar todos os dados variáveis em um único diálogo reduz
-interrupções no fluxo e o tempo total de entrada de dados pelo operador.
+| Função | Descrição |
+|---|---|
+| `show_pause_dialog() → str` | Janela tkinter topmost com botões "Retomar"/"Cancelar". Watchdog reaplica TOPMOST a cada 600 ms. Retorna `"resume"` ou `"cancel"`. |
+| `check_pause()` | Verifica `_pause_requested`; se True, pausa timer, exibe diálogo, aguarda decisão. Se cancelar, `SystemExit(1)`. |
+| `pause_point()` | Ponto seguro chamado entre etapas. Delega para `check_pause()`. |
+| `_verify_last_write_before_pause()` | Revalida último valor enviado via `smart_write` usando Ctrl+A/Ctrl+C. Se divergir, reaplica via `paste_text`. |
 
 ---
 
-#### Seção: Sistema e console
+### `mdfe/console.py` — Gerenciamento de janela do console
+
+**Responsabilidade:** ocultar/restaurar a janela do terminal e emitir beep.
+
+| Função | Descrição |
+|---|---|
+| `hide_console_window()` | Oculta console via `SW_HIDE`. |
+| `restore_console_popup()` | Restaura console como popup (ShowWindow → SetForegroundWindow → HWND_TOPMOST → HWND_NOTOPMOST). |
+| `play_low_beep()` | Beep 400 Hz / 180 ms via `winsound.Beep`. |
 
 ---
 
-##### `ensure_single_instance(name, on_duplicate) → None`
+### `mdfe/instance.py` — Single-instance guard
 
-Cria um mutex nomeado no namespace global do Windows (`Global\AutoMDFText_Mutex`).
-Se o mutex já existir (outra instância rodando), exibe alerta e encerra com
-`SystemExit(0)`. O handle do mutex é mantido em `_SINGLETON_MUTEX_HANDLE` para que
-o GC não o libere antes do encerramento do processo.
+**Responsabilidade:** impedir execução duplicada via mutex Win32.
 
----
-
-##### `hide_console_window() → None`
-
-Oculta a janela do console (`SW_HIDE`) sem encerrar o processo. Usada após a seleção
-de perfil para que a automação rode sem uma janela de terminal visível perturbando o
-operador.
+| Função | Descrição |
+|---|---|
+| `ensure_single_instance()` | Cria mutex `Global\AutoMDFText_Mutex` via `CreateMutexW`. Se já existir, exibe alerta e `SystemExit(0)`. Handle mantido para evitar GC prematuro. |
 
 ---
 
-##### `restore_console_popup() → None`
+### `mdfe/dialogs.py` — Diálogos e prompts
 
-Restaura e traz o console para o topo brevemente (comportamento de popup) ao final
-da automação. Usa uma sequência: ShowWindow → SetForegroundWindow → SetWindowPos
-com HWND_TOPMOST → reverter para HWND_NOTOPMOST. Isso garante que o terminal apareça
-na frente do navegador para que o operador veja o resumo final.
+**Responsabilidade:** wrappers de diálogos pyautogui/tkinter com controle de timer.
 
----
-
-##### `play_low_beep() → None`
-
-Emite um beep de baixa frequência (400 Hz, 180 ms) via `winsound.Beep` ao finalizar
-a automação, sinalizando ao operador que o processo terminou sem que ele precise olhar
-para a tela constantemente.
+| Função | Descrição |
+|---|---|
+| `focused_alert(text, title, button)` | Wrapper de `pyautogui.alert` com pausa/retomada de timer. |
+| `focused_confirm(text, title, buttons)` | Wrapper de `pyautogui.confirm`. Retorna **string do botão** (não índice). |
+| `focused_prompt(text, title, default)` | Wrapper de `pyautogui.prompt` com controle de timer. |
+| `prompt_dt_blocking(text, title)` | Diálogo tkinter personalizado para DT. Validação: não permite OK com campo vazio. |
+| `prompt_batch_info(ncm_options)` | Diálogo tkinter unificado para CT-e, NF1, NF2, NCM (radiobutton + "Outro"). Retorna `dict` ou `None`. |
 
 ---
 
-#### Seção: Etapas de preenchimento
+### `mdfe/keyboard.py` — Teclado e clipboard
+
+**Responsabilidade:** simulação inteligente de digitação e manipulação de clipboard.
+
+| Função | Descrição |
+|---|---|
+| `press_tab(count=1, delay=TAB_DELAY)` | Pressiona Tab N vezes com delay entre cada. |
+| `skip_tabs(count, log_msg="")` | Wrapper de `press_tab` com log opcional. |
+| `paste_text(text, verify, retries, delay, restore_clipboard)` | Cola via clipboard com verificação opcional (Ctrl+A/Ctrl+C). CPF/CNPJ têm verify desativado (máscara). |
+| `smart_write(value, interval, min_paste_len, verify)` | Escolhe entre clipboard (textos ≥ 4 chars ou com chars especiais) e digitação (`pyautogui.write`). |
+| `ensure_caps_off()` | Desativa Caps Lock via `GetKeyState` se estiver ligado. |
+| `upload_latest_xml()` | Localiza arquivo mais recente em Downloads, escreve caminho no campo de upload, confirma com Enter. |
 
 ---
 
-##### `navigate_to_mdfe() → None`
+### `mdfe/browser.py` — Detecção e foco de navegador
 
-Navega do estado atual do navegador até o formulário do MDF-e:
+**Responsabilidade:** identificar janelas do navegador, focá-las, aguardar formulários
+e verificar conteúdo de página via clipboard.
+
+| Função | Descrição |
+|---|---|
+| `_get_foreground_title()` | Título da janela em foco via `GetForegroundWindow` + `GetWindowTextW`. |
+| `_get_foreground_class()` | Classe da janela em foco via `GetClassNameW`. |
+| `_get_window_process_name(hwnd)` | Nome do executável do processo via `GetModuleBaseNameW`. |
+| `_is_cloaked_window(hwnd)` | Verifica se janela está oculta pela DWM. |
+| `_is_top_level_app_window(hwnd)` | Exclui owned windows e toolwindows. |
+| `_is_standard_window(hwnd)` | Verifica estilo `WS_OVERLAPPEDWINDOW`. |
+| `_is_browser_window(title, cls, process_name)` | Combina título/classe/processo para identificar navegador. |
+| `_find_browser_windows()` | Enumera janelas visíveis e filtra usando os predicados acima. |
+| `focus_browser_if_needed()` | Foca navegador via Win+1 (primeiro app fixado na barra). Só age se necessário. |
+| `_click_below_edge_searchbar(offset)` | Clica no conteúdo da página abaixo da barra de endereço do Edge. |
+| `_focus_page_for_copy()` | ESC + `_click_below_edge_searchbar` para garantir foco no corpo da página. |
+| `wait_for_form(target_text, tempo_maximo, intervalo, copy_attempts)` | Aguarda formulário abrir verificando conteúdo via clipboard. Timeout → `SystemExit(1)`. |
+| `verify_cte_on_page(numero_cte, tempo_maximo, intervalo)` | Verifica CT-e na página com 3 estratégias de match. |
+
+---
+
+### `mdfe/profile.py` — Perfis de configuração
+
+**Responsabilidade:** ler arquivos `.txt` de perfil, representá-los em memória com
+hot-reload e oferecer seleção interativa.
+
+| Função / Classe | Descrição |
+|---|---|
+| `parse_profile(path) → dict` | Lê perfil INI-like em dicionário de seções. Ignora `#` e linhas vazias. |
+| `class ConfigProfile` | Perfil em memória com detecção automática de mudança (mtime). Métodos: `reload()`, `ensure_current()`, `get_value(section, key, default)`. |
+| `list_profiles() → list[str]` | Lista arquivos `.txt` em `scripts/`, ordenados. |
+| `choose_profile(interactive_list) → str` | Menu interativo no terminal (índice ou nome, case-insensitive). `0` → `SystemExit(99)` (volta ao menu). Oculta console após seleção. |
+
+---
+
+### `mdfe/steps/` — Etapas de preenchimento
+
+**Responsabilidade:** cada etapa da automação em um módulo dedicado.
+
+---
+
+##### `mdfe/steps/navigate.py` — `navigate_to_mdfe()`
+
+Navega ao formulário MDF-e:
 1. Ctrl+3 → aba 3 (InvoiSys).
-2. Ctrl+F → busca "EMITIR NOTA" → Esc → Enter (abre seção).
-3. Ctrl+F → busca "MDF-E" → Esc → Enter (abre formulário).
+2. Ctrl+F → "EMITIR NOTA" → Esc → Enter.
+3. Ctrl+F → "MDF-E" → Esc → Enter.
 
 ---
 
-##### `fill_mdfe(profile: ConfigProfile, codigo_ncm: str) → None`
+##### `mdfe/steps/fill_mdfe.py` — `fill_mdfe(profile, codigo_ncm)`
 
-Preenche o formulário principal do MDF-e na ordem exata de campos do InvoiSys:
+Preenche formulário principal do MDF-e:
 
 | Campo | Chave do perfil | Seção |
 |---|---|---|
@@ -674,9 +436,9 @@ Preenche o formulário principal do MDF-e na ordem exata de campos do InvoiSys:
 
 ---
 
-##### `fill_modal_rodo(profile: ConfigProfile) → None`
+##### `mdfe/steps/fill_modal_rodo.py` — `fill_modal_rodo(profile)`
 
-Preenche a seção "Modal Rodoviário" do formulário:
+Preenche seção "Modal Rodoviário":
 
 | Campo | Chave do perfil | Seção |
 |---|---|---|
@@ -684,14 +446,11 @@ Preenche a seção "Modal Rodoviário" do formulário:
 | Nome do Contratante | `contratante_nome` | `[MODAL_RODOVIARIO]` |
 | CNPJ do Contratante | `contratante_cnpj` | `[MODAL_RODOVIARIO]` |
 
-Usa Ctrl+F para localizar a seção "MODAL RODO" antes de iniciar o preenchimento.
-
 ---
 
-##### `fill_additional_info(profile: ConfigProfile) → None`
+##### `mdfe/steps/fill_additional_info.py` — `fill_additional_info(profile)`
 
-Preenche a seção "Informações Adicionais / Opcionais" com dados de seguro, frete e
-parcelas. É a etapa mais complexa, com múltiplos sub-formulários abertos via Ctrl+F:
+Preenche "Informações Adicionais / Opcionais" com dados de seguro, frete e parcelas:
 
 | Campo | Chave do perfil | Seção |
 |---|---|---|
@@ -713,49 +472,87 @@ parcelas. É a etapa mais complexa, com múltiplos sub-formulários abertos via 
 
 ---
 
-##### `perform_averbacao(numero_cte, numero_dt, nf_concat) → None`
+##### `mdfe/steps/averbacao.py` — `perform_averbacao(numero_cte, numero_dt, nf_concat)`
 
-Executa a averbação e preenche o campo de contribuinte com os dados da operação:
-
-1. Ctrl+4 → aba de averbação.
-2. Busca sequencial por "OK", "XML", "ENVIAR" via Ctrl+F + Enter (cada um abre uma
-   etapa do processo de averbação).
-3. Upload do XML via `upload_latest_xml()`.
-4. Ctrl+A / Ctrl+C para capturar o número de averbação via regex.
+Executa averbação e preenche campo de contribuinte:
+1. Ctrl+4 → aba averbação.
+2. Busca "OK" → "XML" → "ENVIAR" via Ctrl+F + Enter.
+3. Upload XML via `upload_latest_xml()`.
+4. Captura número de averbação via Ctrl+A/Ctrl+C + regex.
 5. Ctrl+3 → aba MDF-e.
-6. Busca por "DETALHES" → preenche o número de averbação.
-7. Busca por "CONTRIBUINTE" → preenche texto combinado:
-   `"DT: <numero_dt> CTE: <numero_cte> NF: <nf_concat>"`.
+6. Busca "DETALHES" → preenche número de averbação.
+7. Busca "CONTRIBUINTE" → preenche `"DT: <dt> CTE: <cte> NF: <nf_concat>"`.
 
 ---
 
-### `ciot_filler.py` (ou `ciot_filter`) — Componente Obrigatório CIOT (WIP)
+### `mdfe/runner.py` — Motor de execução principal
 
-**Responsabilidade:** preenchimento do campo CIOT (Conhecimento de Transporte
-Intermodal Operacional) que foi adicionado recentemente ao formulário do InvoiSys.
-Anteriormente projetado como opcional, este módulo agora é um **componente obrigatório** do fluxo de automação.
+**Responsabilidade:** orquestra o fluxo completo. Contém `main()` com toda a lógica
+de coordenação: argumentos (`--profile`), inicialização, prompts,
+etapas de preenchimento e resumo final.
 
-#### Estado Atual (WIP) e Integração
+**Fluxo em `main()`:**
+1. `ensure_single_instance()`
+2. `choose_profile()` / `--profile`
+3. `start_automation_session()`
+4. `start_failsafe_f8()`
+5. `focus_browser_if_needed()`
+6. ESC x2 + Ctrl+3 + F5 + Ctrl+1 (preparação do navegador)
+7. `prompt_dt_blocking()` + preenchimento do DT (Ctrl+F "DO DT" e "mero do DT")
+8. `focused_alert()` — aviso para baixar XML do CT-e
+9. `prompt_batch_info()` — CT-e, NF1, NF2, NCM
+10. `verify_cte_on_page()`
+11. `navigate_to_mdfe()` + `wait_for_form("Emissor MDF-e")`
+12. `fill_mdfe()` → `fill_modal_rodo()` → `fill_additional_info()` → `perform_averbacao()`
+13. Resumo final com tempos (automação × real)
+14. **(WIP — próxima tarefa)** Integração do CIOT como etapa obrigatória
 
-O componente está atualmente em fase de desenvolvimento/construção (**WIP - Work In Progress**) e será integrado de forma definitiva e fluida ao fluxo de execução principal imediatamente após a finalização da refatoração em andamento do motor de MDF-e.
+---
 
-Por enquanto, a chamada permanece estruturada de forma que será acionada de forma mandatória ao término do preenchimento principal do MDF-e.
+### `mdfe/__init__.py` — Exportação do pacote
 
-#### Funções do `ciot_filler.py`
+```python
+from mdfe.runner import main
+__all__ = ["main"]
+```
 
-| Função | Descrição |
+---
+
+### `test_suite.py` — Testes unitários
+
+**Responsabilidade:** suíte de testes unitários usando `unittest` com mocks de
+`pyautogui`, `pyperclip`, `pynput` e `ctypes.windll`. Testa todos os 11 módulos do
+pacote `mdfe/`. Inclui runner colorido com diagnóstico detalhado de falhas e sugestões.
+
+| Aspecto | Descrição |
 |---|---|
-| `log(msg)` | Log próprio em `logs/extension_filler_<ts>.log` |
-| `ui_print(msg, style)` | Console formatado (idêntico ao do módulo principal) |
-| `focused_alert(text, title, button)` | Alert sem controle de timer (módulo simples) |
-| `prompt_field_value(field_name, field_label)` | Diálogo genérico para entrada de valor |
-| `smart_write(value, interval, min_paste_len)` | Versão simplificada (sem verify) |
-| `press_tab(count, delay)` | Navegação por Tab |
-| `navigate_to_page_bottom(delay)` | Pressiona End para ir ao fim da página |
-| `find_and_click_ciot_toggle()` | Ctrl+F "INFORMAR DADOS DO CIOT" → Esc → Tab → Space |
-| `restore_console_popup()` | Restaura o console após conclusão |
-| `focus_browser_window(preferred_titles)` | Foca o navegador com múltiplas estratégias |
-| `main()` | Fluxo: focar navegador → End → toggle → prompt CIOT → (próx. fases) |
+| Framework | `unittest` padrão |
+| Mocks | `pyautogui`, `pyperclip`, `pynput`, `ctypes.windll` |
+| Cobertura | logger, timing, failsafe, console, instance, pause, profile, dialogs, keyboard, browser, steps, runner |
+| Execução | `python test_suite.py` |
+
+---
+
+### `script_editor.py` — Editor de perfis (GUI)
+
+**Responsabilidade:** interface gráfica (tkinter) para criar e editar perfis `.txt`.
+
+| Funcionalidade | Descrição |
+|---|---|
+| Carregar perfis | Lista combo Box com perfis existentes |
+| Novo Perfil | Cria arquivo em branco |
+| Novo do Template | Copia `template_config.txt` como base |
+| Assistente | Formulário guiado com validação (dígitos para CEP/CNPJ/NCM, letras para UF) |
+| Salvar / Salvar Como | Grava perfil editado |
+
+---
+
+### CIOT — Extensão obrigatória (WIP — próxima tarefa)
+
+O preenchimento do campo CIOT (Conhecimento de Transporte Intermodal Operacional) será
+integrado ao pipeline como **etapa obrigatória** após a conclusão do MDF-e. Esta é a
+**próxima tarefa de desenvolvimento** do projeto. Os detalhes de implementação serão
+definidos durante sua execução.
 
 ---
 
@@ -812,6 +609,7 @@ seguradora_cnpj    = 33065699000127
 numero_apolice     = 5400035882
 frete_valor        = 1314.27
 frete_tipo         = FRETE
+frete_identificador = FRETE
 numero_banco       = 237
 agencia            = 2372/8
 forma_pagamento    = 1
@@ -840,34 +638,34 @@ Operador → run.bat
     │
     ├─[3] Instalar deps: pip install no .venv local
     ├─[2] Editor: abre script_editor.py
+    ├─[4] Sair
     └─[1] Automação:
           │
-          ├── 1. Sleep inicial (aguarda foco do operador na tela)
-          ├── 2. ensure_single_instance() — bloqueia duplicatas via mutex
-          ├── 3. choose_profile() — operador seleciona a rota
-          ├── 4. start_automation_session() — inicia log e timers
-          ├── 5. start_failsafe_f8() — ativa F8/F9
-          ├── 6. focus_browser_if_needed() — garante navegador em foco
-          ├── 7. ESC x2 — limpa qualquer pop-up residual
-          ├── 8. Ctrl+3 + F5 — recarrega aba do InvoiSys
-          ├── 9. Ctrl+1 + ESC — volta à aba 1
+          ├── 1.  Sleep inicial (SLEEP_LONGER) — aguarda estabilização
+          ├── 2.  ensure_single_instance() — bloqueia duplicatas via mutex
+          ├── 3.  choose_profile() — operador seleciona a rota (ou --profile via arg)
+          ├── 4.  start_automation_session() — inicia log e timers
+          ├── 5.  start_failsafe_f8() — ativa F8/F9
+          ├── 6.  focus_browser_if_needed() — garante navegador em foco
+          ├── 7.  ESC x2 — limpa pop-ups residuais
+          ├── 8.  Ctrl+3 + F5 — recarrega aba do InvoiSys
+          ├── 9.  Ctrl+1 + ESC — volta à aba 1
           ├── 10. prompt_dt_blocking() — operador informa o DT
-          ├── 11. Ctrl+F "DO DT" → preenche o DT no campo
-          ├── 12. Ctrl+F "mero do DT" → preenche novamente (GAP do formulário)
-          ├── 13. focused_alert() — aviso para baixar o XML do CT-e
-          ├── 14. prompt_batch_info() — CT-e, NF1, NF2, NCM
-          ├── 15. verify_cte_on_page() — confirma CT-e na página
-          ├── 16. navigate_to_mdfe() — navega ao formulário
-          ├── 17. wait_for_form("Emissor MDF-e") — aguarda abertura
-          ├── 18. fill_mdfe(profile, ncm) — preenche formulário MDF-e
-          ├── 19. fill_modal_rodo(profile) — preenche Modal Rodoviário
-          ├── 20. fill_additional_info(profile) — preenche Informações Adicionais
-          ├── 21. perform_averbacao(cte, dt, nf) — executa averbação
-          ├── 22. restore_console_popup() + play_low_beep() — alerta ao operador
-          ├── 23. Exibição de resumo (DT, CT-e, NCM, NF, tempos)
-          └── 24. Execução mandatória do CIOT (Componente `ciot_filler.py` / `ciot_filter`) [WIP - Integração pós-refatoração]
-                   ├─ Atualmente aciona o subprocesso `ciot_filler.py` para execução
-                   └─ Integração total e fluida no mesmo fluxo principal pós-refatoração
+          ├── 11. Ctrl+F "DO DT" + paste_text(numero_dt) — preenche campo DT
+          ├── 12. Ctrl+F "mero do DT" + paste_text(numero_dt) — GAP: 2ª ocorrência
+          ├── 13. focused_alert() — aviso para baixar XML do CT-e
+          ├── 14. prompt_batch_info() — CT-e, NF1, NF2, NCM (radiobutton)
+          ├── 15. verify_cte_on_page() — confirma CT-e via 3 estratégias de match
+          ├── 16. ensure_caps_off() — desliga Caps Lock
+          ├── 17. navigate_to_mdfe() — Ctrl+3 → busca "EMITIR NOTA" → "MDF-E"
+          ├── 18. wait_for_form("Emissor MDF-e") — aguarda formulário abrir
+          ├── 19. fill_mdfe(profile, ncm) — preenche formulário MDF-e
+          ├── 20. fill_modal_rodo(profile) — preenche Modal Rodoviário
+          ├── 21. fill_additional_info(profile) — preenche Informações Adicionais
+          ├── 22. perform_averbacao(cte, dt, nf) — executa averbação
+          ├── 23. restore_console_popup() + play_low_beep() — alerta ao operador
+          ├── 24. Resumo final (DT, CT-e, NCM, NF, tempos de automação × real)
+          └── 25. [WIP — próxima tarefa] Integração do CIOT como etapa obrigatória
 ```
 
 ---
@@ -892,12 +690,12 @@ Conclusão da modularização do monólito `modular_mdfe.py`. Todas as etapas se
 **Solução adotada:**
 - Criação do subpacote `mdfe/steps/` contendo cada etapa da automação em um arquivo dedicado.
 - Criação de `mdfe/runner.py` contendo a lógica central de `main()`.
-- O script legado `modular_mdfe.py` foi reduzido a 5 linhas de código, atuando puramente como um redirecionador (wrapper) para `mdfe.runner.main()`, mantendo total compatibilidade com chamadas externas e com o `run.bat`.
+- O script legado `modular_mdfe.py` foi reduzido a 6 linhas, atuando puramente como um redirecionador (wrapper) para `mdfe.runner.main()`, mantendo total compatibilidade com chamadas externas e com o `run.bat`.
 - A função interativa `choose_profile` foi migrada de `modular_mdfe.py` para `mdfe/profile.py`.
 
 **Verificação realizada:**
 - `py_compile` em todos os módulos novos, reestruturados e no wrapper: ✓ OK
-- Compatibilidade de chamada garantida para `run.bat` e relançamento de CIOT.
+- Compatibilidade de chamada garantida para `run.bat`.
 
 **Arquivos modificados:**
 
@@ -924,7 +722,7 @@ Conclusão da modularização do monólito `modular_mdfe.py`. Todas as etapas se
 **Módulo(s) modificados:** `modular_mdfe.py`
 
 **Problema / contexto:**
-Segregação de responsabilidades. Funções auxiliares para lidar com foco do navegador, detecção de janelas ativas e verificação de campos no clipboard (`_get_foreground_title`, `focus_browser_if_needed`, `wait_for_form`, `verify_cte_on_page`, etc.) estavam misturadas no monólito, dificultando sua leitura e eventual reuso pelo componente CIOT.
+Segregação de responsabilidades. Funções auxiliares para lidar com foco do navegador, detecção de janelas ativas e verificação de campos no clipboard (`_get_foreground_title`, `focus_browser_if_needed`, `wait_for_form`, `verify_cte_on_page`, etc.) estavam misturadas no monólito, dificultando sua leitura.
 
 **Solução adotada:**
 Extração das 13 funções utilitárias do navegador para o módulo `mdfe/browser.py`. O arquivo `modular_mdfe.py` passa a importá-las (`focus_browser_if_needed`, `wait_for_form`, `verify_cte_on_page`), eliminando cerca de 340 linhas de código do script principal. A fidelidade do comportamento é mantida idêntica à versão legada.
@@ -1024,8 +822,8 @@ podiam ser isoladas sem qualquer risco de alteração de comportamento.
 
 **Problema / contexto:**
 `modular_mdfe.py` com 2228 linhas misturava logging, timers, failsafe, diálogos, perfis,
-automação e fluxo principal em um único arquivo. Isso dificultava localizar funções,
-reutilizar código no `ciot_filler.py` e manter a documentação por responsabilidade.
+automação e fluxo principal em um único arquivo. Isso dificultava localizar funções
+e manter a documentação por responsabilidade.
 
 **Solução adotada:**
 Criação do pacote `mdfe/` com os primeiros três módulos de infraestrutura.
@@ -1067,43 +865,7 @@ Dependência circular resolvida com lazy import dentro das funções:
 
 ---
 
-### [2025-06] Correção: `focused_confirm` retorna string, não inteiro
 
-**Contexto:** O módulo `ciot_filler.py` não era invocado quando o operador clicava
-"Sim, preencher CIOT" ao final da automação.
-
-**Causa identificada:** A condição `if ciot_choice == 1` sempre falhava porque
-`pyautogui.confirm` retorna a **string do botão clicado**, não seu índice numérico.
-
-**Decisão:** Alterar a comparação para `if ciot_choice == ciot_buttons[0]`,
-usando a lista de botões como referência para evitar hardcode de string.
-
-**Consequência:** A condição agora funciona corretamente. O uso de `ciot_buttons[0]`
-garante que uma eventual mudança no texto do botão seja refletida automaticamente.
-
----
-
-### [2025-06] Design: Módulo CIOT como subprocesso separado
-
-**Contexto:** O campo CIOT foi adicionado ao formulário do InvoiSys depois que a
-automação principal já estava em produção.
-
-**Opções avaliadas:**
-1. Integrar o CIOT diretamente no `main()` como mais uma etapa.
-2. Criar um módulo separado executado como subprocesso.
-
-**Decisão:** Subprocesso separado (`ciot_filler.py`).
-
-**Razões:**
-- O CIOT é opcional — nem toda emissão exige preenchimento.
-- A separação permite executar o módulo CIOT isoladamente para testes e manutenção.
-- O `modular_mdfe.py` pode encerrar com `os._exit(0)` liberando o mutex, e o novo
-  processo ganha controle limpo do terminal.
-
-**Consequência:** Maior complexidade de comunicação entre processos (via subprocesso
-e relançamento do principal com `--skip-ciot`), mas maior flexibilidade operacional.
-
----
 
 ### [2025-06] Design: Python por `.venv` local, sem PATH
 

@@ -10,14 +10,17 @@ Automacao corporativa para preenchimento de MDF-e via navegador, com selecao de 
 
 ## Principais componentes
 
-- Motor de automacao: `modular_mdfe.py`
+- Motor de automacao: pacote `mdfe/` (ponto de entrada: `mdfe.runner.main()`)
+  - Arquitetura modular com módulos separados por responsabilidade (logger, timing, failsafe, etc).
   - Executa o fluxo de preenchimento com base no perfil selecionado.
   - Possui failsafe (F8), pausa (F9), verificacoes de campo e logs por sessao.
+  - O script `modular_mdfe.py` atua como wrapper legado que delega para o pacote `mdfe/`.
 - Editor de perfis: `script_editor.py`
   - Interface grafica para criar, editar e salvar perfis `.txt`.
   - Assistente para gerar perfil a partir do template.
 - Perfis e templates: `scripts/*.txt` e `scripts/template_config.txt`
   - Estrutura padronizada de chaves por secao (ex: `[MDFE]`, `[MODAL_RODOVIARIO]`).
+- Extensao CIOT (WIP — próxima tarefa): preenchimento do campo CIOT será integrado ao pipeline como etapa obrigatória após a automação MDF-e.
 - Logs de execucao: `logs/automation_YYYYMMDD_HHMMSS.log`
   - Registro de passos e mensagens para auditoria e troubleshooting.
 
@@ -29,6 +32,7 @@ Automacao corporativa para preenchimento de MDF-e via navegador, com selecao de 
    - `1` Executar preenchimento do MDF-e
    - `2` Abrir o editor de templates de script
    - `3` Instalar/atualizar dependencias
+   - `4` Sair
 3. Siga as instrucoes exibidas na tela e selecione o perfil desejado.
 
 ## Passo a passo (menu completo)
@@ -68,12 +72,12 @@ Automacao corporativa para preenchimento de MDF-e via navegador, com selecao de 
 - F8: encerra a automacao imediatamente (failsafe).
 - F9: pausa a automacao no proximo ponto seguro; janela de retomar/cancelar.
 - Bloqueio de duplicidade:
-  - `run.bat` impede multiplas instancias e automacoes paralelas.
+  - `run.bat` (PowerShell) + `mdfe/instance.py` (mutex Win32) impedem múltiplas instâncias e automações paralelas.
 
 ## Fluxo de automacao (detalhado)
 
 1. Inicializacao
-  - Ao executar `modular_mdfe.py`, o sistema cria um log de sessao com timestamp.
+  - Ao executar a automacao (via `mdfe.runner.main()`), o sistema cria um log de sessao com timestamp.
   - A automacao entra no modo de seguranca (failsafe e pausa).
 2. Selecao de perfil
   - O operador escolhe um arquivo em `scripts/` com os dados padronizados.
